@@ -208,44 +208,64 @@ if st.sidebar.button("🔄 Refrescar"):
     st.session_state.df_master = load_data()
     st.rerun()
 
-# Filtro Dinámico en Cascada (Evita tablas vacías y cruces sin datos)
+# Filtros Estáticos y Rango de Fechas
+st.sidebar.markdown("### 📅 Filtro Temporal")
+
+# Rango de fechas predefinido
+import datetime
+from dateutil.relativedelta import relativedelta
+
+hoy = datetime.date.today()
+presets = ["Todo Histórico", "Hoy", "Este Mes", "Mes Anterior", "Este Año", "Personalizado"]
+rango_sel = st.sidebar.selectbox("Período Rápido", presets)
+
+fecha_inicio = None
+fecha_fin = None
+
+if rango_sel == "Hoy":
+    fecha_inicio = fecha_fin = hoy
+elif rango_sel == "Este Mes":
+    fecha_inicio = hoy.replace(day=1)
+    fecha_fin = hoy
+elif rango_sel == "Mes Anterior":
+    primer_dia_mes_actual = hoy.replace(day=1)
+    fecha_fin = primer_dia_mes_actual - datetime.timedelta(days=1)
+    fecha_inicio = fecha_fin.replace(day=1)
+elif rango_sel == "Este Año":
+    fecha_inicio = hoy.replace(month=1, day=1)
+    fecha_fin = hoy
+elif rango_sel == "Personalizado":
+    # Asignamos límites min y max basados en el dataframe si es posible
+    min_date = df_master['fecha_dt'].min().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].min()) else hoy - datetime.timedelta(days=365)
+    max_date = df_master['fecha_dt'].max().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].max()) else hoy
+    
+    dates = st.sidebar.date_input("Seleccionar Rango", [min_date, max_date])
+    if len(dates) == 2:
+        fecha_inicio, fecha_fin = dates
+    elif len(dates) == 1:
+        fecha_inicio = fecha_fin = dates[0]
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🏷️ Filtros Operativos")
+def get_list(col): return [] if df_master.empty or col not in df_master.columns else sorted([str(x) for x in df_master[col].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
+
+sel_prov = st.sidebar.multiselect("Provincia", get_list('provincia'))
+sel_loc = st.sidebar.multiselect("Localidad", get_list('localidad'))
+sel_sub = st.sidebar.multiselect("Subtipo Combustible", get_list('subti_comb'))
+
 dff = df_master.copy()
 
-# 1. Año
-if not dff.empty and 'anio' in dff.columns:
-    opciones_anio = sorted([str(x) for x in dff['anio'].unique() if pd.notna(x) and str(x) not in ["0", "nan"]], reverse=True)
-    sel_anio = st.sidebar.multiselect("Año", opciones_anio)
-    if sel_anio:
-        dff = dff[dff['anio'].astype(str).str.strip().isin([str(x).strip() for x in sel_anio])]
+# Aplicar Filtro Temporal
+if fecha_inicio and fecha_fin and not dff.empty and 'fecha_dt' in dff.columns:
+    # Convertimos inicio y fin a datetime para la comparación
+    start_dt = pd.to_datetime(fecha_inicio)
+    end_dt = pd.to_datetime(fecha_fin) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1) # Incluir el final del día
+    dff = dff[(dff['fecha_dt'] >= start_dt) & (dff['fecha_dt'] <= end_dt)]
 
-# 2. Mes
-if not dff.empty and 'mes' in dff.columns:
-    disp_meses = dff['mes'].astype(str).str.upper().unique()
-    opciones_mes = [m for m in MESES_ORDEN if m in disp_meses]
-    sel_mes = st.sidebar.multiselect("Mes", opciones_mes)
-    if sel_mes:
-        dff = dff[dff['mes'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_mes])]
-
-# 3. Provincia
-if not dff.empty and 'provincia' in dff.columns:
-    opciones_prov = sorted([str(x) for x in dff['provincia'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
-    sel_prov = st.sidebar.multiselect("Provincia", opciones_prov)
-    if sel_prov:
-        dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
-
-# 4. Localidad
-if not dff.empty and 'localidad' in dff.columns:
-    opciones_loc = sorted([str(x) for x in dff['localidad'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
-    sel_loc = st.sidebar.multiselect("Localidad", opciones_loc)
-    if sel_loc:
-        dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
-
-# 5. Subtipo Combustible
-if not dff.empty and 'subti_comb' in dff.columns:
-    opciones_sub = sorted([str(x) for x in dff['subti_comb'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
-    sel_sub = st.sidebar.multiselect("Subtipo Combustible", opciones_sub)
-    if sel_sub:
-        dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
+# Aplicar Filtros Operativos
+if sel_prov: dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
+if sel_loc:  dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
+if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
 
 vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
@@ -366,7 +386,8 @@ with t1:
             pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", "B", 16)
             pdf.cell(0, 10, "SITECOMBUSTIBLE PRO - REPORTE EJECUTIVO", ln=True, align="C")
             pdf.line(10, 25, 200, 25); pdf.ln(8)
-            pdf.set_font("Arial", "B", 10); pdf.cell(0, 8, f"Filtros: A:{sel_anio} | M:{sel_mes} | P:{sel_prov}", ln=True)
+            str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+            pdf.set_font("Arial", "B", 10); pdf.cell(0, 8, f"Filtros: Fecha:{str_fechas} | P:{sel_prov}", ln=True)
             pdf.ln(5); pdf.cell(60, 8, "Localidad", 1); pdf.cell(60, 8, "Provincia", 1); pdf.cell(40, 8, "Score", 1); pdf.ln()
             for _, r in grid.head(25).iterrows():
                 pdf.set_font("Arial", "", 9); pdf.cell(60, 7, str(r['localidad'])[:28], 1); pdf.cell(60, 7, str(r['provincia'])[:28], 1); pdf.cell(40, 7, f"{r['Score']:.2f}", 1, 1)
@@ -392,7 +413,8 @@ with t2:
             lbl_eje = "Año"
 
         # Texto de filtros para los reportes
-        txt_filtros = f"Año: {sel_anio or 'Todos'} | Mes: {sel_mes or 'Todos'} | Localidad: {sel_loc or 'Todas'} | Subtipo: {sel_sub or 'Todos'}"
+        str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros = f"Fechas: {str_fechas} | Localidad: {sel_loc or 'Todas'} | Subtipo: {sel_sub or 'Todos'}"
 
         # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg) ---
         st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
@@ -468,8 +490,8 @@ with t3:
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
 
-        # Texto de filtros para los reportes corporativos
-        txt_filtros_t3 = f"Año: {sel_anio or 'Todos'} | Mes: {sel_mes or 'Todos'} | Prov: {sel_prov or 'Todas'} | Sub: {sel_sub or 'Todos'}"
+        str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros_t3 = f"Fechas: {str_fechas} | Prov: {sel_prov or 'Todas'} | Sub: {sel_sub or 'Todos'}"
 
         # --- SECCIÓN 1: MIX POR PROVEEDOR (BARRA HORIZONTAL) ---
         st.markdown("#### 1. Concentración de Volumen por Proveedor")
