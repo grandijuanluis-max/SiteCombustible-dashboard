@@ -88,17 +88,49 @@ st.set_page_config(page_title="SiteCombustible Pro - Juan Luis Corporations", pa
 IMG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBV87XYOOdFbEXeTNNJHA5Dln1RZ3loFqsyEfjEn80yMj0MfDUdJRbwkSirXnc4t4fQN44HRfg56Yy/pub?output=png"
 
 st.markdown(f"""
-    <style>
-    .stApp {{
-        background: linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96)), url("{IMG_URL}");
-        background-size: cover; background-attachment: fixed;
-    }}
-    .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
-    .stTabs [data-baseweb="tab"] {{
-        background-color: rgba(255, 255, 255, 0.7);
-        border-radius: 5px 5px 0px 0px; padding: 10px 20px; font-weight: bold;
-    }}
-    </style>
+        <style>
+        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE */
+        [data-testid="stAppViewContainer"] {{
+            background-image: url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2500&auto=format&fit=crop") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+        }}
+        
+        /* HEADER TOTALMENTE INVISIBLE PARA NO ROMPER LA MAGIA */
+        [data-testid="stHeader"] {{
+            background-color: transparent !important;
+        }}
+        
+        /* SIDEBAR DE CRISTAL OSCURO */
+        [data-testid="stSidebar"] {{
+            background-color: rgba(15, 23, 42, 0.70) !important;
+            backdrop-filter: blur(25px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
+        }}
+        
+        /* CONTENT CENTRAL - GLASSMORPHISM SUPREMO (NEGRO AZULADO TRANSLÚCIDO) */
+        .main .block-container {{
+            background-color: rgba(15, 23, 42, 0.75) !important;
+            padding: 3rem !important;
+            border-radius: 24px !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9) !important;
+            backdrop-filter: blur(18px) !important;
+            -webkit-backdrop-filter: blur(18px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            margin-top: 1rem !important;
+            margin-bottom: 2rem !important;
+            color: #ffffff !important;
+        }}
+        
+        /* TIPOGRAFÍA FUTURISTA / LIMPIA */
+        html, body, [class*="st-"] {{
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+        }}
+        
+        footer {{visibility: hidden;}}
+        </style>
     """, unsafe_allow_html=True)
 
 MESES_ORDEN = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
