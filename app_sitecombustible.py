@@ -136,7 +136,7 @@ st.markdown(f"""
         }}
         
         /* TIPOGRAFÍA FUTURISTA / LIMPIA */
-        html, body, [class*="st-"] {{
+        html, body, [class*="st-"]:not(.material-icons):not(.icon):not(i) {{
             font-family: 'Inter', sans-serif;
             color: #ffffff;
         }}
@@ -292,16 +292,21 @@ def check_login():
                             
                             found = False
                             for row in users_data:
-                                if (str(row.get('Usuario', '')).strip().lower() == usr.strip().lower() or 
-                                    str(row.get('Mail', '')).strip().lower() == usr.strip().lower()) and \
-                                   str(row.get('Password', '')).strip() == pwd:
+                                # Normalización extrema: convierte todas las claves (nombres de columnas) a minúsculas sin espacios
+                                r_norm = {str(k).strip().lower(): v for k, v in row.items()}
+                                
+                                user_val = str(r_norm.get('usuario', '')).strip().lower()
+                                mail_val = str(r_norm.get('mail', r_norm.get('email', r_norm.get('correo', '')))).strip().lower()
+                                pwd_val = str(r_norm.get('password', r_norm.get('clave', r_norm.get('contraseña', '')))).strip()
+
+                                if (usr.strip().lower() in [user_val, mail_val] and usr.strip() != "") and (pwd == pwd_val):
                                     found = True
                                     st.session_state.user_perms = {
-                                        "ingesta": str(row.get('Ingesta', '')).strip().lower(),
-                                        "vision": str(row.get('Vision', '')).strip().lower(),
-                                        "inercia": str(row.get('Inercia', '')).strip().lower(),
-                                        "mercado": str(row.get('Mercado', '')).strip().lower(),
-                                        "copiloto": str(row.get('Copiloto', '')).strip().lower()
+                                        "ingesta": str(r_norm.get('ingesta', '')).strip().lower(),
+                                        "vision": str(r_norm.get('vision', '')).strip().lower(),
+                                        "inercia": str(r_norm.get('inercia', '')).strip().lower(),
+                                        "mercado": str(r_norm.get('mercado', '')).strip().lower(),
+                                        "copiloto": str(r_norm.get('copiloto', '')).strip().lower()
                                     }
                                     st.session_state.logged_in = True
                                     st.rerun()
@@ -700,7 +705,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
         fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
         fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
-                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+                           paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
         fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.1)')
         fig1.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
         st.plotly_chart(fig1, use_container_width=True)
@@ -740,7 +745,7 @@ if app_page == "📈 INERCIA TEMPORAL":
 
         fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+                           paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
         # Conservamos el orden cronológico estricto ocultando el datetime
         cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
         fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.1)')
@@ -816,7 +821,7 @@ if app_page == "🍩 PODER DE MERCADO":
         # Ordenamos: Mayor volumen ARRIBA de todo
         fig_prov.update_yaxes(categoryorder='total ascending')
         fig_prov.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                               paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+                               paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
         fig_prov.update_xaxes(gridcolor='rgba(255,255,255,0.1)')
         st.plotly_chart(fig_prov, use_container_width=True)
 
@@ -854,7 +859,7 @@ if app_page == "🍩 PODER DE MERCADO":
             color_discrete_sequence=px.colors.qualitative.Prism
         )
         fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
-        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Exportación sutil para el Mix Global
@@ -957,7 +962,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         )
         fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.1)') # El más alto arriba
         fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.1)')
-        fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+        fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
         st.plotly_chart(fig_score, use_container_width=True)
 
         # Exportación Sutil del Ranking
