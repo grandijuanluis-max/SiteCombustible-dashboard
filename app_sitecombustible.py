@@ -121,7 +121,7 @@ def load_data():
         df.columns = df.columns.astype(str).str.strip().str.lower()
         # Eliminado rename conflictivo
         if not df.empty:
-            df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce')
+            df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce', dayfirst=True)
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
             df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
             if "cantidad" in df.columns:
@@ -167,7 +167,8 @@ def save_to_google_sheets(df_to_save, mode='full'):
         df_export = df_to_save.copy()
         
         if 'fecha_dt' in df_export.columns:
-            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
+            # Forzamos formato universal de base de datos para prevenir inversiones día/mes
+            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%Y-%m-%d')
             
         headers = list(df_export.columns)
         
@@ -275,7 +276,7 @@ with t0:
             df_new["venta_total"] = df_new["precio"] * df_new["cantidad"]
         
         if 'fecha' in df_new.columns:
-            df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce')
+            df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce', dayfirst=True)
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
             df_new['mes'] = df_new['fecha_dt'].dt.month.map(MESES_MAP)
         
