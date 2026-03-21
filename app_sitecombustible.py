@@ -126,8 +126,8 @@ def load_data():
             df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
             df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
             df["venta_total"] = df["precio"] * df["cantidad"]
-            # Identidad para duplicados (Hash sin cantidad)
-            df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}".encode()).hexdigest(), axis=1)
+            # Identidad para duplicados (Hash de nnumero+formulario+cliente+codigo+fecha)
+            df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}{r.get('nombre')}".encode()).hexdigest(), axis=1)
             df = df.drop_duplicates(subset=['id_unique'])
         else:
             # Asegurar todas las columnas requeridas para evitar KeyErrors
@@ -139,13 +139,23 @@ def save_to_google_sheets(df_to_save):
     try:
         client = get_gsheet_client()
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
-        headers = [h.strip().lower() for h in sheet.row_values(1)]
+        headers = [str(h).strip().lower() for h in sheet.row_values(1)]
+        
+        # Si la hoja está vacía y no tiene cabeceras, se las inyectamos primero
+        if not headers:
+            headers = list(df_to_save.columns)
+            sheet.append_row(headers)
+            
         df_final = pd.DataFrame(columns=headers)
         for col in headers:
             df_final[col] = df_to_save[col] if col in df_to_save.columns else "S/D"
-        sheet.append_rows(df_final.fillna("S/D").astype(str).values.tolist())
+            
+        sheet.append_rows(df_final.fillna("S/D").astype(str).values.tolist(), value_input_option='USER_ENTERED')
         return True
-    except: return False
+    except Exception as e: 
+        import streamlit as st
+        st.error(f"Error técnico de Base de Datos: {e}")
+        return False
 
 # --- CARGA ---
 if 'df_master' not in st.session_state:
@@ -213,7 +223,7 @@ with t0:
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
             df_new['mes'] = df_new['fecha_dt'].dt.month.map(MESES_MAP)
         
-        df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}".encode()).hexdigest(), axis=1)
+        df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}{r.get('nombre')}".encode()).hexdigest(), axis=1)
         nuevos = df_new[~df_new['id_unique'].isin(df_master['id_unique'])]
         
         if not nuevos.empty:
@@ -221,10 +231,11 @@ with t0:
             st.dataframe(nuevos.head(5).astype(str))
             label = "✅ Sincronizado" if st.session_state.synced else "🚀 Confirmar Sincronización"
             if st.button(label, disabled=st.session_state.synced):
-                if save_to_google_sheets(nuevos):
-                    st.session_state.synced = True; st.cache_data.clear()
-                    st.session_state.df_master = load_data()
-                    st.balloons(); time.sleep(1); st.rerun()
+                with st.spinner("Sincronizando de forma segura (puede tardar un minuto)..."):
+                    if save_to_google_sheets(nuevos):
+                        st.session_state.synced = True; st.cache_data.clear()
+                        st.session_state.df_master = load_data()
+                        st.balloons(); time.sleep(1); st.rerun()
         else: st.warning("⚠️ Sin datos nuevos para procesar.")
 
 # --- TAB 1: VISIÓN EJECUTIVA ---
