@@ -291,6 +291,22 @@ t0, t1, t2, t3, t4 = st.tabs([
 # --- TAB 0: CARGA (CON GRISEADO DE BOTÓN) ---
 with t0:
     st.title("Ingesta SiteCombustible Pro")
+    
+    with st.expander("⚠️ Zona de Peligro (Admin)"):
+        st.warning("El borrado manual desde Google Sheets a veces deja rastros ocultos o caché residual que contamina la base de datos (creando duplicados fantasmas con valores 'S/D'). Utiliza este botón para purgar todo y dejarla en 0 matemáticamente.")
+        if st.button("💥 VACIAR BASE DE DATOS COMPLETA", type="primary"):
+            with st.spinner("Purgando base de datos remota..."):
+                sheet = get_gsheet_client()
+                sheet.clear()
+                cols = ['marca_temporal', 'id_unique', 'ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'cantidad', 'precio', 'venta_total', 'fecha', 'fecha_dt', 'anio', 'mes']
+                sheet.append_row(cols)
+                st.cache_data.clear()
+                st.session_state.df_master = load_data()
+                st.session_state.synced = False
+            st.success("✅ Base de Datos aniquilada y reinstalada de cero. Sube tu archivo Excel.")
+            time.sleep(2)
+            st.rerun()
+            
     up_file = st.file_uploader("Subir Archivo", type=["xlsx", "csv"])
     if up_file:
         file_id = hashlib.md5(up_file.getvalue()).hexdigest()
