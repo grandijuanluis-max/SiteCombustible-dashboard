@@ -367,20 +367,24 @@ with t1:
         calc = ag_map.apply(calc_score, axis=1)
         ag_map['Score'], ag_map['Nivel'] = calc.apply(lambda x: x[0]), calc.apply(lambda x: x[1])
 
-        if 'geo' not in st.session_state: st.session_state.geo = {}
-        geolocator = Nominatim(user_agent="sitecomb_vfinal_v50")
-        for _, r in ag_map.sort_values("vol", ascending=False).head(20).iterrows():
-            k = f"{r['localidad']}, {r['provincia']}"
-            if k not in st.session_state.geo:
-                try: res = geolocator.geocode(f"{k}, Argentina"); st.session_state.geo[k] = {"lat": res.latitude, "lon": res.longitude}
-                except: pass
+        with st.expander("🗺️ Ver Mapa de Calor Geográfico (Requiere carga extra)", expanded=False):
+            st.info("💡 El mapa térmico consulta coordenadas en vivo. Presiona el botón debajo para generarlo.")
+            if st.button("🚀 Renderizar Mapa Térmico", key="btn_render_mapa"):
+                with st.spinner("Geocodificando ubicaciones de mayor volumen..."):
+                    if 'geo' not in st.session_state: st.session_state.geo = {}
+                    geolocator = Nominatim(user_agent="sitecomb_vfinal_v50")
+                    for _, r in ag_map.sort_values("vol", ascending=False).head(20).iterrows():
+                        k = f"{r['localidad']}, {r['provincia']}"
+                        if k not in st.session_state.geo:
+                            try: res = geolocator.geocode(f"{k}, Argentina"); st.session_state.geo[k] = {"lat": res.latitude, "lon": res.longitude}
+                            except: pass
 
-        m_data = [[st.session_state.geo[k]['lat'], st.session_state.geo[k]['lon'], r['Score']] 
-                  for _, r in ag_map.iterrows() if (k := f"{r['localidad']}, {r['provincia']}") in st.session_state.geo]
-        
-        m = folium.Map(location=[-38.4, -63.6], zoom_start=5, tiles='cartodb positron')
-        if m_data: HeatMap(m_data, radius=25, blur=20, min_opacity=0.3).add_to(m) 
-        folium_static(m, width=1150)
+                    m_data = [[st.session_state.geo[k]['lat'], st.session_state.geo[k]['lon'], r['Score']] 
+                              for _, r in ag_map.iterrows() if (k := f"{r['localidad']}, {r['provincia']}") in st.session_state.geo]
+                    
+                    m = folium.Map(location=[-38.4, -63.6], zoom_start=5, tiles='cartodb positron')
+                    if m_data: HeatMap(m_data, radius=25, blur=20, min_opacity=0.3).add_to(m) 
+                    folium_static(m, width=1150)
         
         st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
         grid = ag_map.sort_values("Score", ascending=False)
