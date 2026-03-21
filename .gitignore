@@ -1,4 +1,7 @@
 .streamlit/
+*.xlsx
+*.xls
+*.csv
 secret_key.json
 convert_secrets.py
 __pycache__/
