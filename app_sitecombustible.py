@@ -208,20 +208,44 @@ if st.sidebar.button("🔄 Refrescar"):
     st.session_state.df_master = load_data()
     st.rerun()
 
-def get_list(col): return [] if df_master.empty or col not in df_master.columns else sorted([str(x) for x in df_master[col].unique() if pd.notna(x) and str(x) != "S/D" and str(x) != "nan"], reverse=(col=='anio'))
-
-sel_anio = st.sidebar.multiselect("Año", get_list('anio'))
-sel_mes = st.sidebar.multiselect("Mes", MESES_ORDEN)
-sel_loc = st.sidebar.multiselect("Localidad", get_list('localidad'))
-sel_prov = st.sidebar.multiselect("Provincia", get_list('provincia'))
-sel_sub = st.sidebar.multiselect("Subtipo Combustible", get_list('subti_comb'))
-
+# Filtro Dinámico en Cascada (Evita tablas vacías y cruces sin datos)
 dff = df_master.copy()
-if sel_anio: dff = dff[dff['anio'].astype(str).str.strip().isin([str(x).strip() for x in sel_anio])]
-if sel_mes:  dff = dff[dff['mes'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_mes])]
-if sel_loc:  dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
-if sel_prov: dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
-if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
+
+# 1. Año
+if not dff.empty and 'anio' in dff.columns:
+    opciones_anio = sorted([str(x) for x in dff['anio'].unique() if pd.notna(x) and str(x) not in ["0", "nan"]], reverse=True)
+    sel_anio = st.sidebar.multiselect("Año", opciones_anio)
+    if sel_anio:
+        dff = dff[dff['anio'].astype(str).str.strip().isin([str(x).strip() for x in sel_anio])]
+
+# 2. Mes
+if not dff.empty and 'mes' in dff.columns:
+    disp_meses = dff['mes'].astype(str).str.upper().unique()
+    opciones_mes = [m for m in MESES_ORDEN if m in disp_meses]
+    sel_mes = st.sidebar.multiselect("Mes", opciones_mes)
+    if sel_mes:
+        dff = dff[dff['mes'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_mes])]
+
+# 3. Provincia
+if not dff.empty and 'provincia' in dff.columns:
+    opciones_prov = sorted([str(x) for x in dff['provincia'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
+    sel_prov = st.sidebar.multiselect("Provincia", opciones_prov)
+    if sel_prov:
+        dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
+
+# 4. Localidad
+if not dff.empty and 'localidad' in dff.columns:
+    opciones_loc = sorted([str(x) for x in dff['localidad'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
+    sel_loc = st.sidebar.multiselect("Localidad", opciones_loc)
+    if sel_loc:
+        dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
+
+# 5. Subtipo Combustible
+if not dff.empty and 'subti_comb' in dff.columns:
+    opciones_sub = sorted([str(x) for x in dff['subti_comb'].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
+    sel_sub = st.sidebar.multiselect("Subtipo Combustible", opciones_sub)
+    if sel_sub:
+        dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
 
 vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
