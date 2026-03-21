@@ -124,11 +124,21 @@ def load_data():
             df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce')
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
             df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
-            df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
-            df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
+            if "cantidad" in df.columns:
+                df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0)
+            else:
+                df["cantidad"] = 0.0
+                
+            if "precio" in df.columns:
+                df["precio"] = pd.to_numeric(df["precio"], errors='coerce').fillna(0)
+            else:
+                df["precio"] = 0.0
             
             # Forzamos numérico a venta_total y si falla o no existe, usamos precio * cantidad
-            df["venta_total"] = pd.to_numeric(df.get("venta_total"), errors='coerce').fillna(df["precio"] * df["cantidad"])
+            if "venta_total" in df.columns:
+                df["venta_total"] = pd.to_numeric(df["venta_total"], errors='coerce').fillna(df["precio"] * df["cantidad"])
+            else:
+                df["venta_total"] = df["precio"] * df["cantidad"]
             
             # Prevenir colapsos si el archivo subido no tenía las columnas esperadas por los gráficos
             for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
@@ -248,10 +258,21 @@ with t0:
         for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
             if c not in df_new.columns: df_new[c] = "S/D"
 
-        # Aseguramos columnas numéricas sin S/D
-        df_new["cantidad"] = pd.to_numeric(df_new.get("cantidad"), errors='coerce').fillna(0)
-        df_new["precio"] = pd.to_numeric(df_new.get("precio"), errors='coerce').fillna(0)
-        df_new["venta_total"] = pd.to_numeric(df_new.get("venta_total"), errors='coerce').fillna(df_new["precio"] * df_new["cantidad"])
+        # Aseguramos columnas numéricas sin S/D de manera segura evitando Null Pointers
+        if "cantidad" in df_new.columns:
+            df_new["cantidad"] = pd.to_numeric(df_new["cantidad"], errors='coerce').fillna(0)
+        else:
+            df_new["cantidad"] = 0.0
+            
+        if "precio" in df_new.columns:
+            df_new["precio"] = pd.to_numeric(df_new["precio"], errors='coerce').fillna(0)
+        else:
+            df_new["precio"] = 0.0
+            
+        if "venta_total" in df_new.columns:
+            df_new["venta_total"] = pd.to_numeric(df_new["venta_total"], errors='coerce').fillna(df_new["precio"] * df_new["cantidad"])
+        else:
+            df_new["venta_total"] = df_new["precio"] * df_new["cantidad"]
         
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce')
