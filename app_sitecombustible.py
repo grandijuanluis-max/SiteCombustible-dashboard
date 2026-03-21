@@ -13,7 +13,7 @@ import traceback
 from google.oauth2.service_account import Credentials
 from geopy.geocoders import Nominatim
 from fpdf import FPDF
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 # ==========================================
 # 📑 MOTOR DE EXPORTACIÓN CORPORATIVA (HELPER FUNCTIONS)
@@ -211,10 +211,8 @@ if st.sidebar.button("🔄 Refrescar"):
 # Filtros Estáticos y Rango de Fechas
 st.sidebar.markdown("### 📅 Filtro Temporal")
 
-import datetime
-
 # Rango de fechas predefinido
-hoy = datetime.date.today()
+hoy = date.today()
 presets = ["Todo Histórico", "Hoy", "Este Mes", "Mes Anterior", "Este Año", "Personalizado"]
 rango_sel = st.sidebar.selectbox("Período Rápido", presets)
 
@@ -228,14 +226,14 @@ elif rango_sel == "Este Mes":
     fecha_fin = hoy
 elif rango_sel == "Mes Anterior":
     primer_dia_mes_actual = hoy.replace(day=1)
-    fecha_fin = primer_dia_mes_actual - datetime.timedelta(days=1)
+    fecha_fin = primer_dia_mes_actual - timedelta(days=1)
     fecha_inicio = fecha_fin.replace(day=1)
 elif rango_sel == "Este Año":
     fecha_inicio = hoy.replace(month=1, day=1)
     fecha_fin = hoy
 elif rango_sel == "Personalizado":
     # Asignamos límites min y max basados en el dataframe si es posible
-    min_date = df_master['fecha_dt'].min().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].min()) else hoy - datetime.timedelta(days=365)
+    min_date = df_master['fecha_dt'].min().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].min()) else hoy - timedelta(days=365)
     max_date = df_master['fecha_dt'].max().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].max()) else hoy
     
     dates = st.sidebar.date_input("Seleccionar Rango", [min_date, max_date])
