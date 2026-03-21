@@ -119,6 +119,7 @@ def load_data():
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
         df = pd.DataFrame(sheet.get_all_records())
         df.columns = df.columns.str.strip().str.lower()
+        df = df.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo'})
         if not df.empty:
             df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce')
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
@@ -126,8 +127,8 @@ def load_data():
             df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
             df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
             df["venta_total"] = df["precio"] * df["cantidad"]
-            # Identidad para duplicados (Hash de nnumero+formulario+cliente+codigo+fecha)
-            df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}{r.get('nombre')}".encode()).hexdigest(), axis=1)
+            # Identidad robusta usando fecha_dt formateada para evitar asimetrías
+            df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
             df = df.drop_duplicates(subset=['id_unique'])
         else:
             # Asegurar todas las columnas requeridas para evitar KeyErrors
@@ -141,14 +142,21 @@ def save_to_google_sheets(df_to_save):
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
         headers = [str(h).strip().lower() for h in sheet.row_values(1)]
         
+        # Mapear los nombres internos al formato original de tu excel
+        reverse_names = {'nombre': 'cliente', 'subti_comb': 'detalle', 'codigo': 'articulo'}
+        df_export = df_to_save.rename(columns=reverse_names)
+        
+        if 'fecha_dt' in df_export.columns:
+            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
+        
         # Si la hoja está vacía y no tiene cabeceras, se las inyectamos primero
         if not headers:
-            headers = list(df_to_save.columns)
+            headers = list(df_export.columns)
             sheet.append_row(headers)
             
         df_final = pd.DataFrame(columns=headers)
         for col in headers:
-            df_final[col] = df_to_save[col] if col in df_to_save.columns else "S/D"
+            df_final[col] = df_export[col] if col in df_export.columns else "S/D"
             
         sheet.append_rows(df_final.fillna("S/D").astype(str).values.tolist(), value_input_option='USER_ENTERED')
         return True
@@ -223,7 +231,7 @@ with t0:
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
             df_new['mes'] = df_new['fecha_dt'].dt.month.map(MESES_MAP)
         
-        df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}{r.get('nombre')}".encode()).hexdigest(), axis=1)
+        df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
         nuevos = df_new[~df_new['id_unique'].isin(df_master['id_unique'])]
         
         if not nuevos.empty:
