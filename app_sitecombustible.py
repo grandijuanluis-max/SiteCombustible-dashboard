@@ -367,20 +367,26 @@ with t1:
         calc = ag_map.apply(calc_score, axis=1)
         ag_map['Score'], ag_map['Nivel'] = calc.apply(lambda x: x[0]), calc.apply(lambda x: x[1])
 
-        with st.expander("🗺️ Ver Mapa de Calor Geográfico (Requiere carga extra)", expanded=False):
+        import time
+        col_exp_map, _ = st.columns([1, 2])
+        with col_exp_map.expander("🗺️ Ver Mapa de Calor Geográfico (Requiere carga extra)", expanded=False):
             st.info("💡 El mapa térmico consulta coordenadas en vivo. Presiona el botón debajo para generarlo.")
             if st.button("🚀 Renderizar Mapa Térmico", key="btn_render_mapa"):
-                with st.spinner("Geocodificando ubicaciones de mayor volumen..."):
+                with st.spinner("Geocodificando ubicaciones de mayor volumen (aprox 20 seg)..."):
                     if 'geo' not in st.session_state: st.session_state.geo = {}
-                    geolocator = Nominatim(user_agent="sitecomb_vfinal_v50")
+                    geolocator = Nominatim(user_agent="sitecomb_vfinal_v51")
                     for _, r in ag_map.sort_values("vol", ascending=False).head(20).iterrows():
                         k = f"{r['localidad']}, {r['provincia']}"
                         if k not in st.session_state.geo:
-                            try: res = geolocator.geocode(f"{k}, Argentina"); st.session_state.geo[k] = {"lat": res.latitude, "lon": res.longitude}
-                            except: pass
+                            try: 
+                                time.sleep(1.1)
+                                res = geolocator.geocode(f"{k}, Argentina")
+                                st.session_state.geo[k] = {"lat": res.latitude, "lon": res.longitude} if res else None
+                            except: 
+                                st.session_state.geo[k] = None
 
                     m_data = [[st.session_state.geo[k]['lat'], st.session_state.geo[k]['lon'], r['Score']] 
-                              for _, r in ag_map.iterrows() if (k := f"{r['localidad']}, {r['provincia']}") in st.session_state.geo]
+                              for _, r in ag_map.iterrows() if (k := f"{r['localidad']}, {r['provincia']}") in st.session_state.geo and st.session_state.geo[k] is not None]
                     
                     m = folium.Map(location=[-38.4, -63.6], zoom_start=5, tiles='cartodb positron')
                     if m_data: HeatMap(m_data, radius=25, blur=20, min_opacity=0.3).add_to(m) 
@@ -438,7 +444,8 @@ with t2:
         st.plotly_chart(fig1, use_container_width=True)
 
         # Exportación Sutil (Expander)
-        with st.expander("📥 Exportar Reporte de Volumen", expanded=False):
+        col_exp1, _ = st.columns([1, 2])
+        with col_exp1.expander("📥 Exportar Reporte de Volumen", expanded=False):
             ex1, ex2 = st.columns(2)
             fmt1 = ex1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_1")
             mod1 = ex2.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_1", horizontal=True)
@@ -463,7 +470,8 @@ with t2:
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
-        with st.expander("📥 Exportar Reporte de Productos", expanded=False):
+        col_exp2, _ = st.columns([1, 2])
+        with col_exp2.expander("📥 Exportar Reporte de Productos", expanded=False):
             ex3, ex4 = st.columns(2)
             fmt2 = ex3.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_2")
             mod2 = ex4.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_2", horizontal=True)
@@ -519,7 +527,8 @@ with t3:
         st.plotly_chart(fig_prov, use_container_width=True)
 
         # BLOQUE DE EXPORTACIÓN SUTIL (Expander)
-        with st.expander("📥 Exportar Reporte de Proveedores", expanded=False):
+        col_exp3, _ = st.columns([1, 2])
+        with col_exp3.expander("📥 Exportar Reporte de Proveedores", expanded=False):
             e_col1, e_col2 = st.columns(2)
             fmt_t3 = e_col1.selectbox("Formato de Reporte", ["PDF", "XLSX", "XLS"], key="fmt_t3_p1")
             mod_t3 = e_col2.radio("Nivel de Detalle", ["Completo", "Solo Datos"], key="mod_t3_p1", horizontal=True)
@@ -555,7 +564,8 @@ with t3:
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Exportación sutil para el Mix Global
-        with st.expander("📥 Exportar Reporte de Mix Global", expanded=False):
+        col_exp4, _ = st.columns([1, 2])
+        with col_exp4.expander("📥 Exportar Reporte de Mix Global", expanded=False):
             e_col3, e_col4 = st.columns(2)
             fmt_t3_pie = e_col3.selectbox("Formato de Salida", ["PDF", "XLSX"], key="fmt_t3_p2")
             if fmt_t3_pie == "PDF":
