@@ -85,13 +85,27 @@ def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Comp
 # ==========================================
 st.set_page_config(page_title="SiteCombustible Pro - Juan Luis Corporations", page_icon="📊", layout="wide")
 
-IMG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBV87XYOOdFbEXeTNNJHA5Dln1RZ3loFqsyEfjEn80yMj0MfDUjJRbwkSirXnc4t4fQN44HRfg56Yy/pub?output=png"
+import base64
+from pathlib import Path
+
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# Enrutar a la foto de Juan Luis (fondo.png). Si falta, usar Refinería de Unsplash como fallback.
+local_img = "fondo.png"
+if Path(local_img).exists():
+    img_b64 = get_base64_of_bin_file(local_img)
+    bg_img_str = f'url("data:image/png;base64,{img_b64}")'
+else:
+    bg_img_str = 'url("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2500")'
 
 st.markdown(f"""
         <style>
         /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA DE ORO NEGRO) */
         [data-testid="stAppViewContainer"] {{
-            background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), url("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2500") no-repeat center center fixed !important;
+            background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), {bg_img_str} no-repeat center center fixed !important;
             background-size: cover !important;
         }}
         
