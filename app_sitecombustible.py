@@ -347,7 +347,9 @@ with t0:
             with st.expander("🕵️ Auditoría de Fechas Internas (Verificar Lectura)", expanded=True):
                 st.info("Revisa esta tabla para confirmar que Pandas reconoció correctamente 'Enero' y 'Febrero'. Si ves 'NaT', el formato de Excel no es compatible con el estándar DD/MM/YYYY.")
                 cols_check = [c for c in ['fecha', 'fecha_dt', 'anio', 'mes'] if c in df_new.columns]
-                st.dataframe(df_new[cols_check].head(50).astype(str))
+                df_audit = df_new[cols_check].head(50).copy()
+                if 'fecha_dt' in df_audit.columns: df_audit['fecha_dt'] = df_audit['fecha_dt'].dt.strftime('%d/%m/%Y')
+                st.dataframe(df_audit.astype(str))
             
             
             label = "✅ Sincronizado (Upsert Total)" if st.session_state.synced else "🚀 Confirmar Sincronización Total (Full Sync)"
