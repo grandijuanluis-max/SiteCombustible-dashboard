@@ -296,7 +296,8 @@ with t0:
         st.warning("El borrado manual desde Google Sheets a veces deja rastros ocultos o caché residual que contamina la base de datos (creando duplicados fantasmas con valores 'S/D'). Utiliza este botón para purgar todo y dejarla en 0 matemáticamente.")
         if st.button("💥 VACIAR BASE DE DATOS COMPLETA", type="primary"):
             with st.spinner("Purgando base de datos remota..."):
-                sheet = get_gsheet_client()
+                client = get_gsheet_client()
+                sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
                 sheet.clear()
                 cols = ['marca_temporal', 'id_unique', 'ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'cantidad', 'precio', 'venta_total', 'fecha', 'fecha_dt', 'anio', 'mes']
                 sheet.append_row(cols)
