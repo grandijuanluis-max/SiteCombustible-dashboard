@@ -430,31 +430,34 @@ if app_page == "🌐 HUB PRINCIPAL":
     st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1e3a8a;'>⛽ SiteCombustible Neural Hub</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 1.2rem; margin-bottom: 3rem;'>Selecciona un módulo operativo para comenzar el análisis.</p>", unsafe_allow_html=True)
     
-    # Diseñamos Botoneras Gigantes con Permisos RBAC
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.info("### 🚀 Ingesta de Datos\nSube los crudos y consolida el backend.")
-        if st.button("Ir a Ingesta", type="primary", use_container_width=True, disabled=perms.get('ingesta') != 'si'):
-            go_to("🚀 INGESTA & CARGA"); st.rerun()
-    with c2:
-        st.success("### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y mandos.")
-        if st.button("Ir a Visión", type="primary", use_container_width=True, disabled=perms.get('vision') != 'si'):
-            go_to("🏠 VISIÓN EJECUTIVA"); st.rerun()
-    with c3:
-        st.warning("### 📈 Inercia Temporal\nCiclos y empuje por volúmenes.")
-        if st.button("Ir a Inercia", type="primary", use_container_width=True, disabled=perms.get('inercia') != 'si'):
-            go_to("📈 INERCIA TEMPORAL"); st.rerun()
+    # Diseñamos Botoneras Gigantes Dinámicas (solo se ven los autorizados, empaquetados a la izquierda)
+    modulos = []
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    c4, c5, _ = st.columns([1,1,1])
-    with c4:
-        st.error("### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.")
-        if st.button("Ir a Mercado", type="primary", use_container_width=True, disabled=perms.get('mercado') != 'si'):
-            go_to("🍩 PODER DE MERCADO"); st.rerun()
-    with c5:
-        st.info("### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.")
-        if st.button("Ir a Copiloto", type="primary", use_container_width=True, disabled=perms.get('copiloto') != 'si'):
-            go_to("🧠 COPILOTO ESTRATÉGICO"); st.rerun()
+    if perms.get('ingesta') == 'si':
+        modulos.append({"title": "### 🚀 Ingesta de Datos\nSube los crudos y consolida el backend.", "btn": "Ir a Ingesta", "target": "🚀 INGESTA & CARGA", "style": st.info})
+    if perms.get('vision') == 'si':
+        modulos.append({"title": "### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y mandos.", "btn": "Ir a Visión", "target": "🏠 VISIÓN EJECUTIVA", "style": st.success})
+    if perms.get('inercia') == 'si':
+        modulos.append({"title": "### 📈 Inercia Temporal\nCiclos y empuje por volúmenes.", "btn": "Ir a Inercia", "target": "📈 INERCIA TEMPORAL", "style": st.warning})
+    if perms.get('mercado') == 'si':
+        modulos.append({"title": "### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.", "btn": "Ir a Mercado", "target": "🍩 PODER DE MERCADO", "style": st.error})
+    if perms.get('copiloto') == 'si':
+        modulos.append({"title": "### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.", "btn": "Ir a Copiloto", "target": "🧠 COPILOTO ESTRATÉGICO", "style": st.info})
+        
+    if not modulos:
+        st.error("⚠️ Acceso Restringido: No tienes permisos asignados a ningún módulo. Contacta al administrador para que agregue un 'si' en tus columnas.")
+    else:
+        # Renderizamos iterando en filas de hasta 3 columnas
+        for idx in range(0, len(modulos), 3):
+            fila_mods = modulos[idx:idx+3]
+            cols = st.columns(3)
+            for i, mod in enumerate(fila_mods):
+                with cols[i]:
+                    mod["style"](mod["title"])
+                    if st.button(mod["btn"], key=f"btn_{mod['target']}", type="primary", use_container_width=True):
+                        go_to(mod["target"])
+                        st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
 
 # --- TAB 0: CARGA (CON GRISEADO DE BOTÓN) ---
 if app_page == "🚀 INGESTA & CARGA":
