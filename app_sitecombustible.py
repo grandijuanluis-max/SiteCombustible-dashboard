@@ -141,11 +141,10 @@ def load_data():
         return df
     except: return pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
 
-def save_to_google_sheets(df_to_save):
+def save_to_google_sheets(df_to_save, mode='full'):
     try:
         client = get_gsheet_client()
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
-        headers = [str(h).strip().lower() for h in sheet.row_values(1)]
         
         # Mapear los nombres internos al formato original de tu excel
         reverse_names = {'nombre': 'cliente', 'subti_comb': 'detalle', 'codigo': 'articulo'}
@@ -153,17 +152,21 @@ def save_to_google_sheets(df_to_save):
         
         if 'fecha_dt' in df_export.columns:
             df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
-        
-        # Si la hoja está vacía y no tiene cabeceras, se las inyectamos primero
-        if not headers:
-            headers = list(df_export.columns)
-            sheet.append_row(headers)
             
+        headers = list(df_export.columns)
         df_final = pd.DataFrame(columns=headers)
         for col in headers:
             df_final[col] = df_export[col] if col in df_export.columns else "S/D"
             
-        sheet.append_rows(df_final.fillna("S/D").astype(str).values.tolist(), value_input_option='USER_ENTERED')
+        data_to_upload = df_final.fillna("S/D").astype(str).values.tolist()
+        
+        if mode == 'full':
+            sheet.clear()
+            data_to_upload = [headers] + data_to_upload
+            sheet.append_rows(data_to_upload, value_input_option='USER_ENTERED')
+        else:
+            sheet.append_rows(data_to_upload, value_input_option='USER_ENTERED')
+            
         return True
     except Exception as e: 
         import streamlit as st
@@ -241,19 +244,26 @@ with t0:
             df_new['mes'] = df_new['fecha_dt'].dt.month.map(MESES_MAP)
         
         df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
-        nuevos = df_new[~df_new['id_unique'].isin(df_master['id_unique'])]
         
-        if not nuevos.empty:
-            st.success(f"✅ {len(nuevos)} nuevos registros detectados")
-            st.dataframe(nuevos.head(5).astype(str))
-            label = "✅ Sincronizado" if st.session_state.synced else "🚀 Confirmar Sincronización"
+        # LOGICA DE UPSERT (Full Sync)
+        # Combinamos la base vieja con el excel nuevo, eliminamos duplicados quedándonos con la versión del excel nuevo (last)
+        df_merged = pd.concat([df_master, df_new]).drop_duplicates(subset=['id_unique'], keep='last')
+        
+        nuevos_reales = len(df_merged) - len(df_master)
+        actualizados = len(df_new) - nuevos_reales
+        
+        if len(df_new) > 0:
+            st.success(f"✅ Análisis completado: Se insertarán {nuevos_reales} fila(s) nueva(s) y se actualizarán {actualizados} fila(s) existente(s).")
+            st.dataframe(df_new.head(5).astype(str))
+            
+            label = "✅ Sincronizado (Upsert Total)" if st.session_state.synced else "🚀 Confirmar Sincronización Total (Full Sync)"
             if st.button(label, disabled=st.session_state.synced):
-                with st.spinner("Sincronizando de forma segura (puede tardar un minuto)..."):
-                    if save_to_google_sheets(nuevos):
+                with st.spinner(f"Planchando y reescribiendo la Base de Datos con {len(df_merged)} registros (tarda unos 5 seg)..."):
+                    if save_to_google_sheets(df_merged, mode='full'):
                         st.session_state.synced = True; st.cache_data.clear()
                         st.session_state.df_master = load_data()
                         st.balloons(); time.sleep(1); st.rerun()
-        else: st.warning("⚠️ Sin datos nuevos para procesar.")
+        else: st.warning("⚠️ El archivo subido está vacío.")
 
 # --- TAB 1: VISIÓN EJECUTIVA ---
 with t1:
