@@ -342,7 +342,12 @@ with t0:
         
         if len(df_new) > 0:
             st.success(f"✅ Análisis completado: Se insertarán {nuevos_reales} fila(s) nueva(s) y se actualizarán {actualizados} fila(s) existente(s).")
-            st.dataframe(df_new.head(5).astype(str))
+            
+            with st.expander("🕵️ Auditoría de Fechas Internas (Verificar Lectura)", expanded=True):
+                st.info("Revisa esta tabla para confirmar que Pandas reconoció correctamente 'Enero' y 'Febrero'. Si ves 'NaT', el formato de Excel no es compatible con el estándar DD/MM/YYYY.")
+                cols_check = [c for c in ['fecha', 'fecha_dt', 'anio', 'mes'] if c in df_new.columns]
+                st.dataframe(df_new[cols_check].head(50).astype(str))
+            
             
             label = "✅ Sincronizado (Upsert Total)" if st.session_state.synced else "🚀 Confirmar Sincronización Total (Full Sync)"
             if st.button(label, disabled=st.session_state.synced):
