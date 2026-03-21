@@ -211,10 +211,9 @@ if st.sidebar.button("🔄 Refrescar"):
 # Filtros Estáticos y Rango de Fechas
 st.sidebar.markdown("### 📅 Filtro Temporal")
 
-# Rango de fechas predefinido
 import datetime
-from dateutil.relativedelta import relativedelta
 
+# Rango de fechas predefinido
 hoy = datetime.date.today()
 presets = ["Todo Histórico", "Hoy", "Este Mes", "Mes Anterior", "Este Año", "Personalizado"]
 rango_sel = st.sidebar.selectbox("Período Rápido", presets)
