@@ -422,14 +422,25 @@ with t2:
         v_mode = st.radio("Escala Temporal:", ["Año", "Mes", "Semana"], horizontal=True, key="mando_temporal_v5")
         
         df_t = dff.copy().dropna(subset=['fecha_dt'])
+        meses_abrev = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
+        
         if v_mode == "Semana":
-            df_t['eje_temporal'] = df_t['fecha_dt'].dt.to_period('W').dt.start_time
+            df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('W').dt.start_time
+            if df_t['anio'].nunique() == 1:
+                df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str)
+            else:
+                df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str) + " '" + df_t['fecha_dt'].dt.strftime("%y")
             lbl_eje = "Semana"
         elif v_mode == "Mes":
-            df_t['eje_temporal'] = df_t['fecha_dt'].dt.to_period('M').dt.start_time
+            df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('M').dt.start_time
+            if df_t['anio'].nunique() == 1:
+                df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str)
+            else:
+                df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str) + "-" + df_t['fecha_dt'].dt.strftime("%y")
             lbl_eje = "Mes"
         else:
-            df_t['eje_temporal'] = df_t['anio'].astype(int)
+            df_t['sort_key'] = df_t['anio'].astype(int)
+            df_t['eje_temporal'] = df_t['anio'].astype(str)
             lbl_eje = "Año"
 
         # Texto de filtros para los reportes
@@ -438,16 +449,16 @@ with t2:
 
         # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg) ---
         st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
-        e_vol_total = df_t.groupby('eje_temporal').agg(
+        e_vol_total = df_t.groupby(['sort_key', 'eje_temporal']).agg(
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
-        ).reset_index().sort_values("eje_temporal")
+        ).reset_index().sort_values("sort_key")
 
         # Gráfico con estética refinada
         fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig1.update_traces(line_color="#1e3a8a", line_width=2, marker=dict(size=6))
         fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified")
-        fig1.update_xaxes(type='category')
+        fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique())
         st.plotly_chart(fig1, use_container_width=True)
 
         # Exportación Sutil (Expander)
@@ -469,13 +480,15 @@ with t2:
 
         # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg) ---
         st.markdown(f"#### 2. Empuje por Producto (Tendencia por {v_mode})")
-        e_sub = df_t.groupby(['eje_temporal', 'subti_comb']).agg(
+        e_sub = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
-        ).reset_index().sort_values("eje_temporal")
+        ).reset_index().sort_values("sort_key")
 
         fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig2.update_xaxes(type='category')
+        # Conservamos el orden cronológico estricto ocultando el datetime
+        cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
+        fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2)
         st.plotly_chart(fig2, use_container_width=True)
 
         col_exp2, _ = st.columns([1, 2])
