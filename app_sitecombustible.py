@@ -125,11 +125,12 @@ def load_data():
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
             df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
             df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
-            df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
-            df["venta_total"] = df["precio"] * df["cantidad"]
+            # Solo pisar venta_total si no viene del excel, permitiendo conservar el dato duro
+            if 'venta_total' not in df.columns:
+                df["venta_total"] = df["precio"] * df["cantidad"]
             
             # Prevenir colapsos si el archivo subido no tenía las columnas esperadas por los gráficos
-            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
+            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'venta_total']:
                 if c not in df.columns: df[c] = "S/D"
                 
             # Identidad robusta usando fecha_dt formateada para evitar asimetrías
@@ -139,7 +140,12 @@ def load_data():
             # Asegurar todas las columnas requeridas para evitar KeyErrors
             df = pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
         return df
-    except: return pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
+    except Exception as e: 
+        import traceback
+        import streamlit as st
+        st.error(f"Error mortal leyendo la base en la nube: {e}")
+        st.error(traceback.format_exc())
+        return pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
 
 def save_to_google_sheets(df_to_save, mode='full'):
     try:
@@ -234,11 +240,11 @@ with t0:
         else: df_new = pd.read_csv(up_file, encoding='latin-1', sep=None, engine='python', on_bad_lines='skip')
         
         df_new.columns = df_new.columns.str.strip().str.lower()
-        df_new = df_new.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo'})
+        df_new = df_new.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo', 'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
         # Blindaje: Inyección de columnas que podrían no venir en el Excel
-        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
+        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'venta_total']:
             if c not in df_new.columns: df_new[c] = "S/D"
         
         if 'fecha' in df_new.columns:
