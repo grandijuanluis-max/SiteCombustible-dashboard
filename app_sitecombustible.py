@@ -154,10 +154,13 @@ def save_to_google_sheets(df_to_save, mode='full'):
             df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
             
         headers = list(df_export.columns)
-        df_final = pd.DataFrame(columns=headers)
+        
+        df_final = df_export.copy()
         for col in headers:
-            df_final[col] = df_export[col] if col in df_export.columns else "S/D"
-            
+            if col not in df_final.columns:
+                df_final[col] = "S/D"
+        df_final = df_final[headers]
+        
         data_to_upload = df_final.fillna("S/D").astype(str).values.tolist()
         
         if mode == 'full':
