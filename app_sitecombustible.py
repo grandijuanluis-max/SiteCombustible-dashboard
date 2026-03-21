@@ -123,7 +123,7 @@ def load_data():
         if not df.empty:
             df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce', dayfirst=True)
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
-            df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
+            df['mes'] = df['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
             if "cantidad" in df.columns:
                 df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0)
             else:
@@ -217,11 +217,11 @@ sel_prov = st.sidebar.multiselect("Provincia", get_list('provincia'))
 sel_sub = st.sidebar.multiselect("Subtipo Combustible", get_list('subti_comb'))
 
 dff = df_master.copy()
-if sel_anio: dff = dff[dff['anio'].astype(str).isin(sel_anio)]
-if sel_mes:  dff = dff[dff['mes'].astype(str).isin(sel_mes)]
-if sel_loc:  dff = dff[dff['localidad'].astype(str).isin(sel_loc)]
-if sel_prov: dff = dff[dff['provincia'].astype(str).isin(sel_prov)]
-if sel_sub:  dff = dff[dff['subti_comb'].astype(str).isin(sel_sub)]
+if sel_anio: dff = dff[dff['anio'].astype(str).str.strip().isin([str(x).strip() for x in sel_anio])]
+if sel_mes:  dff = dff[dff['mes'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_mes])]
+if sel_loc:  dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
+if sel_prov: dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
+if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
 
 vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
@@ -278,7 +278,7 @@ with t0:
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce', dayfirst=True)
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
-            df_new['mes'] = df_new['fecha_dt'].dt.month.map(MESES_MAP)
+            df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
         
         df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
         
