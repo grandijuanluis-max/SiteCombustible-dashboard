@@ -118,8 +118,8 @@ def load_data():
         client = get_gsheet_client()
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
         df = pd.DataFrame(sheet.get_all_records())
-        df.columns = df.columns.str.strip().str.lower()
-        df = df.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo'})
+        df.columns = df.columns.astype(str).str.strip().str.lower()
+        # Eliminado rename conflictivo
         if not df.empty:
             df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce')
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
@@ -152,9 +152,8 @@ def save_to_google_sheets(df_to_save, mode='full'):
         client = get_gsheet_client()
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
         
-        # Mapear los nombres internos al formato original de tu excel
-        reverse_names = {'nombre': 'cliente', 'subti_comb': 'detalle', 'codigo': 'articulo'}
-        df_export = df_to_save.rename(columns=reverse_names)
+        # El archivo usa la nomenclatura original del excel nativamente
+        df_export = df_to_save.copy()
         
         if 'fecha_dt' in df_export.columns:
             df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
@@ -239,8 +238,9 @@ with t0:
         if 'xls' in f_name: df_new = pd.read_excel(up_file, engine='openpyxl')
         else: df_new = pd.read_csv(up_file, encoding='latin-1', sep=None, engine='python', on_bad_lines='skip')
         
-        df_new.columns = df_new.columns.str.strip().str.lower()
-        df_new = df_new.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo', 'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
+        df_new.columns = df_new.columns.astype(str).str.strip().str.lower()
+        # Se renombra venta_total sin afectar los identificadores originales del excel superior (nombre, subti_comb, etc.)
+        df_new = df_new.rename(columns={'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
         # Blindaje: Inyección de columnas que podrían no venir en el Excel
