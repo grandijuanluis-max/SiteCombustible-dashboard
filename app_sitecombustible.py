@@ -141,6 +141,19 @@ st.markdown(f"""
             color: #ffffff;
         }}
         
+        /* CORREGIR CONTRASTE DE LOS DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
+        div[data-baseweb="select"] > div, div[data-baseweb="menu"], div[data-baseweb="popover"], ul[data-baseweb="menu"] li {{
+            color: #0f172a !important; /* Texto Azul Pizarra muy oscuro / corporativo */
+        }}
+        div[data-baseweb="menu"], div[data-baseweb="popover"] {{
+            background-color: #f8fafc !important; /* Fondo claro para que resalten */
+        }}
+        /* Color de los 'tags' que quedan seleccionados en el filtro */
+        span[data-baseweb="tag"] {{
+            background-color: #1e3a8a !important; /* Fondo Azul Rey para la cápsula */
+            color: #ffffff !important; /* Letra blanca en la cápsula */
+        }}
+        
         footer {{visibility: hidden;}}
         </style>
     """, unsafe_allow_html=True)
