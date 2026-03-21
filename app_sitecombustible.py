@@ -85,13 +85,13 @@ def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Comp
 # ==========================================
 st.set_page_config(page_title="SiteCombustible Pro - Juan Luis Corporations", page_icon="📊", layout="wide")
 
-IMG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBV87XYOOdFbEXeTNNJHA5Dln1RZ3loFqsyEfjEn80yMj0MfDUdJRbwkSirXnc4t4fQN44HRfg56Yy/pub?output=png"
+IMG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBV87XYOOdFbEXeTNNJHA5Dln1RZ3loFqsyEfjEn80yMj0MfDUjJRbwkSirXnc4t4fQN44HRfg56Yy/pub?output=png"
 
 st.markdown(f"""
         <style>
-        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE */
+        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA / COMBUSTIBLES) */
         [data-testid="stAppViewContainer"] {{
-            background-image: url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2500&auto=format&fit=crop") !important;
+            background-image: linear-gradient(rgba(10, 15, 30, 0.65), rgba(10, 15, 30, 0.65)), url("https://images.unsplash.com/photo-1580982361715-db14e84b7264?q=80&w=2500&auto=format&fit=crop") !important;
             background-size: cover !important;
             background-position: center !important;
             background-attachment: fixed !important;
@@ -102,22 +102,22 @@ st.markdown(f"""
             background-color: transparent !important;
         }}
         
-        /* SIDEBAR DE CRISTAL OSCURO */
+        /* SIDEBAR DE CRISTAL OSCURO PERO MUY TRANSPARENTE */
         [data-testid="stSidebar"] {{
-            background-color: rgba(15, 23, 42, 0.70) !important;
+            background-color: rgba(15, 23, 42, 0.40) !important;
             backdrop-filter: blur(25px) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
         }}
         
-        /* CONTENT CENTRAL - GLASSMORPHISM SUPREMO (NEGRO AZULADO TRANSLÚCIDO) */
+        /* CONTENT CENTRAL - GLASSMORPHISM SUPREMO (NEGRO AZULADO MUY TRANSPARENTE) */
         .main .block-container {{
-            background-color: rgba(15, 23, 42, 0.75) !important;
+            background-color: rgba(15, 23, 42, 0.45) !important;
             padding: 3rem !important;
             border-radius: 24px !important;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9) !important;
-            backdrop-filter: blur(18px) !important;
-            -webkit-backdrop-filter: blur(18px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.10) !important;
             margin-top: 1rem !important;
             margin-bottom: 2rem !important;
             color: #ffffff !important;
