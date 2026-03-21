@@ -396,16 +396,19 @@ with t1:
         grid = ag_map.sort_values("Score", ascending=False)
         st.dataframe(grid.style.applymap(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
 
-        if st.button("⬇️ Descargar Reporte PDF Corporativo"):
-            pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "SITECOMBUSTIBLE PRO - REPORTE EJECUTIVO", ln=True, align="C")
-            pdf.line(10, 25, 200, 25); pdf.ln(8)
-            str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
-            pdf.set_font("Arial", "B", 10); pdf.cell(0, 8, f"Filtros: Fecha:{str_fechas} | P:{sel_prov}", ln=True)
-            pdf.ln(5); pdf.cell(60, 8, "Localidad", 1); pdf.cell(60, 8, "Provincia", 1); pdf.cell(40, 8, "Score", 1); pdf.ln()
-            for _, r in grid.head(25).iterrows():
-                pdf.set_font("Arial", "", 9); pdf.cell(60, 7, str(r['localidad'])[:28], 1); pdf.cell(60, 7, str(r['provincia'])[:28], 1); pdf.cell(40, 7, f"{r['Score']:.2f}", 1, 1)
-            st.download_button("Descargar PDF", data=pdf.output(dest='S').encode('latin-1'), file_name="Reporte_BI_SiteCombustible.pdf")
+        col_exp_grid, _ = st.columns([1, 2])
+        with col_exp_grid.expander("📥 Exportar Grilla Estratégica", expanded=False):
+            ex_g1, ex_g2 = st.columns(2)
+            fmt_grid = ex_g1.selectbox("Formato", ["PDF", "XLSX"], key="exp_grid_fmt")
+            str_fechas_g = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+            txt_filtros_grid = f"Fechas: {str_fechas_g} | Prov: {sel_prov or 'Todas'}"
+            
+            if fmt_grid == "PDF":
+                btn_pdf_grid = generar_pdf_corporativo(grid.head(50), "Reporte Grilla Estratégica", txt_filtros_grid, "Completo")
+                st.download_button("Descargar Reporte PDF", btn_pdf_grid, "Grilla_Estrategica.pdf", "application/pdf")
+            else:
+                btn_xl_grid = generar_excel_corporativo(grid, "xlsx")
+                st.download_button("Descargar Archivo XLSX", btn_xl_grid, "Grilla_Estrategica.xlsx")
 
 # --- TAB 2: ANÁLISIS DE INERCIA TEMPORAL (MODIFICACIÓN QUIRÚRGICA) ---
 with t2:
@@ -438,7 +441,7 @@ with t2:
         ).reset_index().sort_values("eje_temporal")
 
         # Gráfico con estética refinada
-        fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_white")
+        fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig1.update_traces(line_color="#1e3a8a", line_width=2, marker=dict(size=6))
         fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified")
         st.plotly_chart(fig1, use_container_width=True)
@@ -466,7 +469,7 @@ with t2:
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
         ).reset_index().sort_values("eje_temporal")
 
-        fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_white")
+        fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -494,6 +497,19 @@ with t2:
         fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_white")
         fig_prov.update_xaxes(categoryorder='total descending')
         st.plotly_chart(fig_prov, use_container_width=True)
+        
+        col_exp_prov, _ = st.columns([1, 2])
+        with col_exp_prov.expander("📥 Exportar Reporte de Zona", expanded=False):
+            ex_p1, ex_p2 = st.columns(2)
+            fmt_prov = ex_p1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_prov")
+            mod_prov = ex_p2.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_prov", horizontal=True)
+            
+            if fmt_prov == "PDF":
+                btn_pdf_prov = generar_pdf_corporativo(r_prov, "Reporte Dominancia por Zona", txt_filtros, mod_prov)
+                st.download_button("Descargar Reporte PDF  ", btn_pdf_prov, "Dominancia_Zona.pdf", "application/pdf")
+            else:
+                btn_xl_prov = generar_excel_corporativo(r_prov, fmt_prov.lower())
+                st.download_button(f"Descargar Archivo {fmt_prov}  ", btn_xl_prov, f"Dominancia_Zona.{fmt_prov.lower()}")
         
 # --- TAB 3: PODER DE MERCADO (LOGICA CERTIFICADA & EXPORTABLE) ---
 with t3:
