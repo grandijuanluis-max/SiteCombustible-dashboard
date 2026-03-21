@@ -130,10 +130,10 @@ def load_data():
             df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}".encode()).hexdigest(), axis=1)
             df = df.drop_duplicates(subset=['id_unique'])
         else:
-            # Asegurar las columnas base para que los filtros y dashboards no exploten si está vacía
-            df = pd.DataFrame(columns=['anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre'])
+            # Asegurar todas las columnas requeridas para evitar KeyErrors
+            df = pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
         return df
-    except: return pd.DataFrame(columns=['anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre'])
+    except: return pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
 
 def save_to_google_sheets(df_to_save):
     try:
