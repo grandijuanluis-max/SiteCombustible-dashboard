@@ -127,6 +127,11 @@ def load_data():
             df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
             df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
             df["venta_total"] = df["precio"] * df["cantidad"]
+            
+            # Prevenir colapsos si el archivo subido no tenía las columnas esperadas por los gráficos
+            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
+                if c not in df.columns: df[c] = "S/D"
+                
             # Identidad robusta usando fecha_dt formateada para evitar asimetrías
             df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
             df = df.drop_duplicates(subset=['id_unique'])
@@ -225,6 +230,10 @@ with t0:
         df_new.columns = df_new.columns.str.strip().str.lower()
         df_new = df_new.rename(columns={'cliente': 'nombre', 'detalle': 'subti_comb', 'articulo': 'codigo'})
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
+        
+        # Blindaje: Inyección de columnas que podrían no venir en el Excel
+        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
+            if c not in df_new.columns: df_new[c] = "S/D"
         
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce')
