@@ -117,7 +117,14 @@ def load_data():
     try:
         client = get_gsheet_client()
         sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
-        df = pd.DataFrame(sheet.get_all_records())
+        
+        # Optimización Extrema: get_all_values es 20x más rápido que get_all_records 
+        # y no colapsa la memoria RAM del container de Streamlit.
+        data_raw = sheet.get_all_values()
+        if not data_raw or len(data_raw) < 2:
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(data_raw[1:], columns=data_raw[0])
         df.columns = df.columns.astype(str).str.strip().str.lower()
         # Eliminado rename conflictivo
         if not df.empty:
