@@ -278,18 +278,67 @@ vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
 
 # ==========================================
-# 🏗️ TABS (FILOSOFÍA DE EMBUDO)
+# 🏗️ ENRUTADOR PRINCIPAL (LANDING HUB)
 # ==========================================
-t0, t1, t2, t3, t4 = st.tabs([
-    "🚀 INICIO & CARGA", 
-    "🏠 VISIÓN EJECUTIVA", 
-    "📈 ANÁLISIS DE INERCIA TEMPORAL", 
-    "🍩 PODER DE MERCADO", 
-    "🧠 COPILOTO ESTRATÉGICO"
-])
+if 'app_page' not in st.session_state:
+    st.session_state.app_page = "🌐 HUB PRINCIPAL"
+
+def go_to(page):
+    st.session_state.app_page = page
+
+# Selector Visual Lateral
+st.sidebar.markdown("---")
+# Para que el selectbox lea y escriba en el session_state usamos key y un index
+all_pages = ["🌐 HUB PRINCIPAL", "🚀 INGESTA & CARGA", "🏠 VISIÓN EJECUTIVA", "📈 INERCIA TEMPORAL", "🍩 PODER DE MERCADO", "🧠 COPILOTO ESTRATÉGICO"]
+page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
+
+selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
+
+# Si el usuario hace click manual en el radio, sincronizamos el state
+if selected_page != st.session_state.app_page:
+    st.session_state.app_page = selected_page
+    st.rerun()
+
+app_page = st.session_state.app_page
+
+# --- TABLA DE ENRUTAMIENTO (ESTADO) ---
+if app_page == "🌐 HUB PRINCIPAL":
+    st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1e3a8a;'>⛽ SiteCombustible Neural Hub</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 1.2rem; margin-bottom: 3rem;'>Selecciona un módulo operativo para comenzar el análisis.</p>", unsafe_allow_html=True)
+    
+    # Diseñamos Botoneras Gigantes
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.info("### 🚀 Ingesta de Datos\nSube los archivos crudos y consolida el backend.")
+        if st.button("Ir a Ingesta", type="primary", use_container_width=True):
+            go_to("🚀 INGESTA & CARGA")
+            st.rerun()
+    with c2:
+        st.success("### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y control de mandos.")
+        if st.button("Ir a Visión", type="primary", use_container_width=True):
+            go_to("🏠 VISIÓN EJECUTIVA")
+            st.rerun()
+    with c3:
+        st.warning("### 📈 Inercia Temporal\nCiclos de vida y empuje direccional por volúmenes.")
+        if st.button("Ir a Inercia", type="primary", use_container_width=True):
+            go_to("📈 INERCIA TEMPORAL")
+            st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    c4, c5, _ = st.columns([1,1,1])
+    with c4:
+        st.error("### 🍩 Poder de Mercado\nDominancia Zonal, Share y Grilla de Estrategia.")
+        if st.button("Ir a Mercado", type="primary", use_container_width=True):
+            go_to("🍩 PODER DE MERCADO")
+            st.rerun()
+    with c5:
+        st.info("### 🧠 Copiloto Inteligente\nMotor predictivo AI y diagnósticos de auditoría.")
+        if st.button("Ir a Copiloto", type="primary", use_container_width=True):
+            go_to("🧠 COPILOTO ESTRATÉGICO")
+            st.rerun()
 
 # --- TAB 0: CARGA (CON GRISEADO DE BOTÓN) ---
-with t0:
+if app_page == "🚀 INGESTA & CARGA":
     st.title("Ingesta SiteCombustible Pro")
     
     with st.expander("⚠️ Zona de Peligro (Admin)"):
@@ -367,6 +416,16 @@ with t0:
                 df_audit = df_new[cols_check].head(50).copy()
                 if 'fecha_dt' in df_audit.columns: df_audit['fecha_dt'] = df_audit['fecha_dt'].dt.strftime('%d/%m/%Y')
                 st.dataframe(df_audit.astype(str))
+                st.dataframe(df_audit.astype(str))
+            
+            if len(df_master) == 0 and actualizados > 0:
+                with st.expander(f"⚙️ Auditoría de Colisiones ({actualizados} Repetidas en tu Archivo)"):
+                    st.warning("El motor matemático agrupó estas filas. Compara de a pares: verás que comparten EXACTAMENTE Fecha, Formulario, NNumero, Código y Nombre de Cliente. Como la regla de negocio es estricta, se conservó sólo una.")
+                    dups = df_new[df_new.duplicated(subset=['id_unique'], keep=False)].sort_values('id_unique')
+                    cols_dup = [c for c in ['fecha_dt', 'formulario', 'nnumero', 'codigo', 'nombre', 'cantidad'] if c in dups.columns]
+                    df_dups = dups[cols_dup].head(100).copy()
+                    if 'fecha_dt' in df_dups.columns: df_dups['fecha_dt'] = df_dups['fecha_dt'].dt.strftime('%d/%m/%Y')
+                    st.dataframe(df_dups.astype(str))
             
             
             label = "✅ Sincronizado (Upsert Total)" if st.session_state.synced else "🚀 Confirmar Sincronización Total (Full Sync)"
@@ -378,8 +437,8 @@ with t0:
                         st.balloons(); time.sleep(1); st.rerun()
         else: st.warning("⚠️ El archivo subido está vacío.")
 
-# --- TAB 1: VISIÓN EJECUTIVA ---
-with t1:
+# --- TAB 1: DASHBOARD EJECUTIVO ---
+if app_page == "🏠 VISIÓN EJECUTIVA":
     if not dff.empty:
         k1, k2, k3 = st.columns(3)
         k1.metric("Volumen Bruto (Total)", f"{vol_tot_global:,.0f}")
@@ -439,7 +498,7 @@ with t1:
                 st.download_button("Descargar Archivo XLSX", btn_xl_grid, "Grilla_Estrategica.xlsx")
 
 # --- TAB 2: ANÁLISIS DE INERCIA TEMPORAL (MODIFICACIÓN QUIRÚRGICA) ---
-with t2:
+if app_page == "📈 INERCIA TEMPORAL":
     if not dff.empty:
         st.subheader("📊 Inercia Temporal de Despacho")
         
@@ -602,8 +661,8 @@ with t2:
     else:
         st.warning("⚠️ No se encontraron despachos registrados para este cruce de fechas y filtros operativos.")
         
-# --- TAB 3: PODER DE MERCADO (LOGICA CERTIFICADA & EXPORTABLE) ---
-with t3:
+# --- TAB 3: PODER DE MERCADO Y ESTRATEGIA GEOGRÁFICA ---
+if app_page == "🍩 PODER DE MERCADO":
     if not dff.empty:
         st.subheader("🏭 Poder de Negociación por Proveedor")
         
@@ -684,8 +743,8 @@ with t3:
     else:
         st.warning("⚠️ No hay datos para analizar el Poder de Mercado.")
 
-# --- TAB 4: COPILOTO ESTRATÉGICO (VERSIÓN FINAL RECTIFICADA) ---
-with t4:
+# --- TAB 4: COPILOTO ESTRATÉGICO ---
+if app_page == "🧠 COPILOTO ESTRATÉGICO":
     if not dff.empty:
         st.subheader("🧠 Inteligencia de Negocio & Análisis de Riesgo")
         
