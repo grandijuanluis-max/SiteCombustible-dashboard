@@ -429,35 +429,71 @@ with t2:
         df_t = dff.copy().dropna(subset=['fecha_dt'])
         meses_abrev = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
         
+        # Definir Límites Matemáticos del Espinazo Temporal (Relleno Continuo de Ceros)
+        t_start = pd.to_datetime(fecha_inicio) if fecha_inicio else df_t['fecha_dt'].min()
+        t_end = pd.to_datetime(fecha_fin) if fecha_fin else df_t['fecha_dt'].max()
+        
+        df_spine = pd.DataFrame()
+        if not pd.isna(t_start) and not pd.isna(t_end):
+            if v_mode == "Semana":
+                spine_keys = pd.Series(pd.date_range(start=t_start, end=t_end, freq='D')).dt.to_period('W').dt.start_time.unique()
+            elif v_mode == "Mes":
+                spine_keys = pd.Series(pd.date_range(start=t_start, end=t_end, freq='D')).dt.to_period('M').dt.start_time.unique()
+            else:
+                spine_keys = list(range(t_start.year, t_end.year + 1))
+            
+            df_spine = pd.DataFrame({'sort_key': spine_keys})
+            
+            if v_mode == "Semana":
+                anios = df_spine['sort_key'].dt.year
+                if anios.nunique() == 1:
+                    df_spine['eje_temporal'] = "S" + df_spine['sort_key'].dt.isocalendar().week.astype(str)
+                else:
+                    df_spine['eje_temporal'] = "S" + df_spine['sort_key'].dt.isocalendar().week.astype(str) + " '" + df_spine['sort_key'].dt.strftime("%y")
+                lbl_eje = "Semana"
+            elif v_mode == "Mes":
+                anios = df_spine['sort_key'].dt.year
+                if anios.nunique() == 1:
+                    df_spine['eje_temporal'] = df_spine['sort_key'].dt.month.map(meses_abrev).astype(str)
+                else:
+                    df_spine['eje_temporal'] = df_spine['sort_key'].dt.month.map(meses_abrev).astype(str) + "-" + df_spine['sort_key'].dt.strftime("%y")
+                lbl_eje = "Mes"
+            else:
+                df_spine['eje_temporal'] = df_spine['sort_key'].astype(str)
+                lbl_eje = "Año"
+        
+        # Mapeo idéntico en el dataset real
         if v_mode == "Semana":
             df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('W').dt.start_time
-            if df_t['anio'].nunique() == 1:
-                df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str)
-            else:
-                df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str) + " '" + df_t['fecha_dt'].dt.strftime("%y")
-            lbl_eje = "Semana"
+            if df_t['anio'].nunique() == 1: df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str)
+            else: df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str) + " '" + df_t['fecha_dt'].dt.strftime("%y")
         elif v_mode == "Mes":
             df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('M').dt.start_time
-            if df_t['anio'].nunique() == 1:
-                df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str)
-            else:
-                df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str) + "-" + df_t['fecha_dt'].dt.strftime("%y")
-            lbl_eje = "Mes"
+            if df_t['anio'].nunique() == 1: df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str)
+            else: df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str) + "-" + df_t['fecha_dt'].dt.strftime("%y")
         else:
             df_t['sort_key'] = df_t['anio'].astype(int)
             df_t['eje_temporal'] = df_t['anio'].astype(str)
-            lbl_eje = "Año"
 
         # Texto de filtros para los reportes
         str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
         txt_filtros = f"Fechas: {str_fechas} | Localidad: {sel_loc or 'Todas'} | Subtipo: {sel_sub or 'Todos'}"
 
-        # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg) ---
+        # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg + Espinazo Cero) ---
         st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
-        e_vol_total = df_t.groupby(['sort_key', 'eje_temporal']).agg(
+        e_vol_total_raw = df_t.groupby(['sort_key', 'eje_temporal']).agg(
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
-        ).reset_index().sort_values("sort_key")
+        ).reset_index()
+
+        if not df_spine.empty:
+            e_vol_total = pd.merge(df_spine, e_vol_total_raw, on=['sort_key', 'eje_temporal'], how='left')
+            e_vol_total['volumen'] = e_vol_total['volumen'].fillna(0)
+            e_vol_total['ventas'] = e_vol_total['ventas'].fillna(0)
+        else:
+            e_vol_total = e_vol_total_raw
+            
+        e_vol_total = e_vol_total.sort_values("sort_key")
 
         # Gráfico con estética refinada
         fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
@@ -483,11 +519,21 @@ with t2:
 
         st.markdown("---")
 
-        # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg) ---
+        # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg + Producto Cartesiano) ---
         st.markdown(f"#### 2. Empuje por Producto (Tendencia por {v_mode})")
-        e_sub = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
+        e_sub_raw = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
-        ).reset_index().sort_values("sort_key")
+        ).reset_index()
+
+        if not df_spine.empty and not e_sub_raw.empty:
+            subtipos_unicos = e_sub_raw['subti_comb'].unique()
+            spine_cross = df_spine.assign(key=1).merge(pd.DataFrame({'subti_comb': subtipos_unicos, 'key': 1}), on='key').drop('key', axis=1)
+            e_sub = pd.merge(spine_cross, e_sub_raw, on=['sort_key', 'eje_temporal', 'subti_comb'], how='left')
+            e_sub['volumen'] = e_sub['volumen'].fillna(0)
+        else:
+            e_sub = e_sub_raw
+            
+        e_sub = e_sub.sort_values("sort_key")
 
         fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
