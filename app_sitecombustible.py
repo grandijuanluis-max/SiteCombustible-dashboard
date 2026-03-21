@@ -268,6 +268,55 @@ def save_to_google_sheets(df_to_save, mode='full'):
         st.error(f"Error técnico de Base de Datos: {e}")
         return False
 
+# --- PASARELA DE AUTENTICACION (RBAC) ---
+def check_login():
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.user_perms = {}
+
+    if not st.session_state.logged_in:
+        with st.container():
+            st.markdown("<br><br><h2 style='text-align: center;'>🔐 Acceso Clasificado</h2>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                with st.form("login_form"):
+                    usr = st.text_input("Usuario o Email")
+                    pwd = st.text_input("Contraseña", type="password")
+                    submit = st.form_submit_button("Autorizar Conexión", type="primary", use_container_width=True)
+                    
+                    if submit:
+                        try:
+                            client = get_gsheet_client()
+                            ws_users = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").worksheet("Usuarios")
+                            users_data = ws_users.get_all_records()
+                            
+                            found = False
+                            for row in users_data:
+                                if (str(row.get('Usuario', '')).strip().lower() == usr.strip().lower() or 
+                                    str(row.get('Mail', '')).strip().lower() == usr.strip().lower()) and \
+                                   str(row.get('Password', '')).strip() == pwd:
+                                    found = True
+                                    st.session_state.user_perms = {
+                                        "ingesta": str(row.get('Ingesta', '')).strip().lower(),
+                                        "vision": str(row.get('Vision', '')).strip().lower(),
+                                        "inercia": str(row.get('Inercia', '')).strip().lower(),
+                                        "mercado": str(row.get('Mercado', '')).strip().lower(),
+                                        "copiloto": str(row.get('Copiloto', '')).strip().lower()
+                                    }
+                                    st.session_state.logged_in = True
+                                    st.rerun()
+                                    
+                            if not found:
+                                st.error("❌ Credenciales incorrectas o usuario inexistente.")
+                        except Exception as e:
+                            if "WorksheetNotFound" in str(type(e)):
+                                st.error("⚠️ ERROR DEL SISTEMA: Falta crear la pestaña 'Usuarios' en tu Google Sheets maestro. Crea las columnas: Usuario | Mail | Password | Ingesta | Vision | Inercia | Mercado | Copiloto")
+                            else:
+                                st.error(f"Error conectando a Auth: {e}")
+        st.stop() # CORTAFUEGOS: Bloquea la app entera si no hay login.
+
+check_login()
+
 # --- CARGA ---
 if 'df_master' not in st.session_state:
     st.session_state.df_master = load_data()
@@ -356,8 +405,15 @@ def go_to(page):
 
 # Selector Visual Lateral
 st.sidebar.markdown("---")
-# Para que el selectbox lea y escriba en el session_state usamos key y un index
-all_pages = ["🌐 HUB PRINCIPAL", "🚀 INGESTA & CARGA", "🏠 VISIÓN EJECUTIVA", "📈 INERCIA TEMPORAL", "🍩 PODER DE MERCADO", "🧠 COPILOTO ESTRATÉGICO"]
+# Generación dinámica del menú basado en RBAC
+perms = st.session_state.get('user_perms', {})
+all_pages = ["🌐 HUB PRINCIPAL"]
+if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
+if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
+if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
+if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
+if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+
 page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
 
 selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
@@ -374,36 +430,31 @@ if app_page == "🌐 HUB PRINCIPAL":
     st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1e3a8a;'>⛽ SiteCombustible Neural Hub</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 1.2rem; margin-bottom: 3rem;'>Selecciona un módulo operativo para comenzar el análisis.</p>", unsafe_allow_html=True)
     
-    # Diseñamos Botoneras Gigantes
+    # Diseñamos Botoneras Gigantes con Permisos RBAC
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.info("### 🚀 Ingesta de Datos\nSube los archivos crudos y consolida el backend.")
-        if st.button("Ir a Ingesta", type="primary", use_container_width=True):
-            go_to("🚀 INGESTA & CARGA")
-            st.rerun()
+        st.info("### 🚀 Ingesta de Datos\nSube los crudos y consolida el backend.")
+        if st.button("Ir a Ingesta", type="primary", use_container_width=True, disabled=perms.get('ingesta') != 'si'):
+            go_to("🚀 INGESTA & CARGA"); st.rerun()
     with c2:
-        st.success("### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y control de mandos.")
-        if st.button("Ir a Visión", type="primary", use_container_width=True):
-            go_to("🏠 VISIÓN EJECUTIVA")
-            st.rerun()
+        st.success("### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y mandos.")
+        if st.button("Ir a Visión", type="primary", use_container_width=True, disabled=perms.get('vision') != 'si'):
+            go_to("🏠 VISIÓN EJECUTIVA"); st.rerun()
     with c3:
-        st.warning("### 📈 Inercia Temporal\nCiclos de vida y empuje direccional por volúmenes.")
-        if st.button("Ir a Inercia", type="primary", use_container_width=True):
-            go_to("📈 INERCIA TEMPORAL")
-            st.rerun()
+        st.warning("### 📈 Inercia Temporal\nCiclos y empuje por volúmenes.")
+        if st.button("Ir a Inercia", type="primary", use_container_width=True, disabled=perms.get('inercia') != 'si'):
+            go_to("📈 INERCIA TEMPORAL"); st.rerun()
     
     st.markdown("<br>", unsafe_allow_html=True)
     c4, c5, _ = st.columns([1,1,1])
     with c4:
-        st.error("### 🍩 Poder de Mercado\nDominancia Zonal, Share y Grilla de Estrategia.")
-        if st.button("Ir a Mercado", type="primary", use_container_width=True):
-            go_to("🍩 PODER DE MERCADO")
-            st.rerun()
+        st.error("### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.")
+        if st.button("Ir a Mercado", type="primary", use_container_width=True, disabled=perms.get('mercado') != 'si'):
+            go_to("🍩 PODER DE MERCADO"); st.rerun()
     with c5:
-        st.info("### 🧠 Copiloto Inteligente\nMotor predictivo AI y diagnósticos de auditoría.")
-        if st.button("Ir a Copiloto", type="primary", use_container_width=True):
-            go_to("🧠 COPILOTO ESTRATÉGICO")
-            st.rerun()
+        st.info("### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.")
+        if st.button("Ir a Copiloto", type="primary", use_container_width=True, disabled=perms.get('copiloto') != 'si'):
+            go_to("🧠 COPILOTO ESTRATÉGICO"); st.rerun()
 
 # --- TAB 0: CARGA (CON GRISEADO DE BOTÓN) ---
 if app_page == "🚀 INGESTA & CARGA":
