@@ -219,7 +219,10 @@ if st.sidebar.button("🔄 Refrescar"):
 st.sidebar.markdown("### 📅 Filtro Temporal")
 
 # Rango de fechas predefinido
-hoy = date.today()
+# Anclamos "Hoy" al máximo registro real del dataset para evitar vacíos si el reloj del server está adelantado a la data.
+hoy_server = date.today()
+hoy = df_master['fecha_dt'].max().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].max()) else hoy_server
+if hoy > hoy_server: hoy = hoy_server # Cap límite
 presets = ["Todo Histórico", "Hoy", "Este Mes", "Mes Anterior", "Este Año", "Personalizado"]
 rango_sel = st.sidebar.selectbox("Período Rápido", presets)
 
@@ -444,6 +447,7 @@ with t2:
         fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig1.update_traces(line_color="#1e3a8a", line_width=2, marker=dict(size=6))
         fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified")
+        fig1.update_xaxes(type='category')
         st.plotly_chart(fig1, use_container_width=True)
 
         # Exportación Sutil (Expander)
@@ -471,6 +475,7 @@ with t2:
 
         fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_white", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig2.update_xaxes(type='category')
         st.plotly_chart(fig2, use_container_width=True)
 
         col_exp2, _ = st.columns([1, 2])
@@ -510,6 +515,8 @@ with t2:
             else:
                 btn_xl_prov = generar_excel_corporativo(r_prov, fmt_prov.lower())
                 st.download_button(f"Descargar Archivo {fmt_prov}  ", btn_xl_prov, f"Dominancia_Zona.{fmt_prov.lower()}")
+    else:
+        st.warning("⚠️ No se encontraron despachos registrados para este cruce de fechas y filtros operativos.")
         
 # --- TAB 3: PODER DE MERCADO (LOGICA CERTIFICADA & EXPORTABLE) ---
 with t3:
