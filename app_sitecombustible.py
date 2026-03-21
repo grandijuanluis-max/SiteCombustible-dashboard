@@ -89,12 +89,10 @@ IMG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBV87XYOOdFbEXeTNNJH
 
 st.markdown(f"""
         <style>
-        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA / COMBUSTIBLES) */
+        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA DE ORO NEGRO) */
         [data-testid="stAppViewContainer"] {{
-            background-image: linear-gradient(rgba(10, 15, 30, 0.65), rgba(10, 15, 30, 0.65)), url("https://images.unsplash.com/photo-1580982361715-db14e84b7264?q=80&w=2500&auto=format&fit=crop") !important;
+            background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), url("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2500") no-repeat center center fixed !important;
             background-size: cover !important;
-            background-position: center !important;
-            background-attachment: fixed !important;
         }}
         
         /* HEADER TOTALMENTE INVISIBLE PARA NO ROMPER LA MAGIA */
