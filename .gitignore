@@ -1,0 +1,6 @@
+.streamlit/
+secret_key.json
+convert_secrets.py
+__pycache__/
+*.pyc
+.DS_Store

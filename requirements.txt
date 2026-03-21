@@ -1,0 +1,12 @@
+gspread
+oauth2client
+pandas
+streamlit
+streamlit-folium
+folium
+plotly
+geopy
+fpdf
+xlsxwriter
+openpyxl
+altair
