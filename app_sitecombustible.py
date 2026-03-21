@@ -120,15 +120,20 @@ def load_data():
         df = pd.DataFrame(sheet.get_all_records())
         df.columns = df.columns.str.strip().str.lower()
         if not df.empty:
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
-            df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0)
-            df["precio"] = pd.to_numeric(df["precio"], errors='coerce').fillna(0)
+            df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce')
+            df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
+            df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
+            df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
+            df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
             df["venta_total"] = df["precio"] * df["cantidad"]
             # Identidad para duplicados (Hash sin cantidad)
             df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha'))[:10]}{r.get('formulario')}{r.get('nnumero')}{r.get('codigo')}".encode()).hexdigest(), axis=1)
             df = df.drop_duplicates(subset=['id_unique'])
+        else:
+            # Asegurar las columnas base para que los filtros y dashboards no exploten si está vacía
+            df = pd.DataFrame(columns=['anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre'])
         return df
-    except: return pd.DataFrame()
+    except: return pd.DataFrame(columns=['anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre'])
 
 def save_to_google_sheets(df_to_save):
     try:
@@ -157,7 +162,7 @@ if st.sidebar.button("🔄 Refrescar"):
     st.session_state.df_master = load_data()
     st.rerun()
 
-def get_list(col): return sorted([str(x) for x in df_master[col].unique() if x and str(x) != "S/D"], reverse=(col=='anio'))
+def get_list(col): return [] if df_master.empty or col not in df_master.columns else sorted([str(x) for x in df_master[col].unique() if pd.notna(x) and str(x) != "S/D" and str(x) != "nan"], reverse=(col=='anio'))
 
 sel_anio = st.sidebar.multiselect("Año", get_list('anio'))
 sel_mes = st.sidebar.multiselect("Mes", MESES_ORDEN)
