@@ -125,12 +125,13 @@ def load_data():
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
             df['mes'] = df['fecha_dt'].dt.month.map(MESES_MAP)
             df["cantidad"] = pd.to_numeric(df.get("cantidad"), errors='coerce').fillna(0)
-            # Solo pisar venta_total si no viene del excel, permitiendo conservar el dato duro
-            if 'venta_total' not in df.columns:
-                df["venta_total"] = df["precio"] * df["cantidad"]
+            df["precio"] = pd.to_numeric(df.get("precio"), errors='coerce').fillna(0)
+            
+            # Forzamos numérico a venta_total y si falla o no existe, usamos precio * cantidad
+            df["venta_total"] = pd.to_numeric(df.get("venta_total"), errors='coerce').fillna(df["precio"] * df["cantidad"])
             
             # Prevenir colapsos si el archivo subido no tenía las columnas esperadas por los gráficos
-            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'venta_total']:
+            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
                 if c not in df.columns: df[c] = "S/D"
                 
             # Identidad robusta usando fecha_dt formateada para evitar asimetrías
@@ -243,9 +244,14 @@ with t0:
         df_new = df_new.rename(columns={'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
-        # Blindaje: Inyección de columnas que podrían no venir en el Excel
-        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'venta_total']:
+        # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
+        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
             if c not in df_new.columns: df_new[c] = "S/D"
+
+        # Aseguramos columnas numéricas sin S/D
+        df_new["cantidad"] = pd.to_numeric(df_new.get("cantidad"), errors='coerce').fillna(0)
+        df_new["precio"] = pd.to_numeric(df_new.get("precio"), errors='coerce').fillna(0)
+        df_new["venta_total"] = pd.to_numeric(df_new.get("venta_total"), errors='coerce').fillna(df_new["precio"] * df_new["cantidad"])
         
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce')
