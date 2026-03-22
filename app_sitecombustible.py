@@ -824,8 +824,8 @@ if app_page == "📈 INERCIA TEMPORAL":
             
         e_sub = e_sub.sort_values("sort_key")
 
-        fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
-        fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje, 'subti_comb': 'Combustible'})
+        fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
                            paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
         # Conservamos el orden cronológico estricto ocultando el datetime
         cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
@@ -854,10 +854,10 @@ if app_page == "📈 INERCIA TEMPORAL":
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
         ).reset_index()
         
-        fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark")
+        fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
         fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
         fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig_prov.update_layout(margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+        fig_prov.update_layout(margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
         st.plotly_chart(fig_prov, use_container_width=True)
         
         col_exp_prov, _ = st.columns([1, 2])
@@ -892,21 +892,21 @@ if app_page == "🍩 PODER DE MERCADO":
         # --- SECCIÓN 1: MIX POR PROVEEDOR (BARRA HORIZONTAL) ---
         st.markdown("#### 1. Concentración de Volumen por Proveedor")
         # El mayor volumen siempre arriba para lectura rápida
-        fig_prov = px.bar(
+        fig_prov_2 = px.bar(
             prov_mix, 
             y='ult_provee', 
             x='volumen', 
             color='subti_comb', 
             orientation='h', 
             template="plotly_dark",
-            labels={'ult_provee': 'Proveedor', 'volumen': 'Volumen (Lts)', 'subti_comb': 'Producto'}
+            labels={'ult_provee': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
         )
         # Ordenamos: Mayor volumen ARRIBA de todo
-        fig_prov.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
-        fig_prov.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        fig_prov_2.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+        fig_prov_2.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
                                paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        fig_prov.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig_prov, use_container_width=True)
+        fig_prov_2.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        st.plotly_chart(fig_prov_2, use_container_width=True)
 
         # BLOQUE DE EXPORTACIÓN SUTIL (Expander)
         col_exp3, _ = st.columns([1, 2])
@@ -939,10 +939,11 @@ if app_page == "🍩 PODER DE MERCADO":
             names='subti_comb', 
             hole=0.5,
             template="plotly_dark",
+            labels={'subti_comb': 'Combustible', 'volumen': 'Lts'},
             color_discrete_sequence=px.colors.qualitative.Prism
         )
         fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
-        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
+        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), legend=dict(font=dict(color='#ffffff', size=13), title=dict(text='Combustible', font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Exportación sutil para el Mix Global
