@@ -154,6 +154,21 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
+        /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES PRIMARIOS (APAGAR ROJO Y DAR LEGIBILIDAD) */
+        [data-testid="stAlert"] * {{
+            color: #ffffff !important;
+            font-weight: 500 !important;
+        }}
+        [data-testid="baseButton-primary"] {{
+            background-color: rgba(30, 58, 138, 0.45) !important; /* Azul tech translúcido en vez de rojo puro */
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            color: #ffffff !important;
+        }}
+        [data-testid="baseButton-primary"]:hover {{
+            background-color: rgba(30, 58, 138, 0.9) !important;
+            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        }}
+        
         /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
         /* Al forzar 'Inter', rompimos las flechas del menú y los expanders. Esto lo repara: */
         span[class*="material-symbols-rounded"], 
