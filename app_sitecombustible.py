@@ -104,7 +104,8 @@ else:
 st.markdown(f"""
         <style>
         /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA DE ORO NEGRO) */
-        [data-testid="stAppViewContainer"] {{
+        [data-testid="stAppViewContainer"],
+        [data-testid="stFullScreenFrame"] {{
             background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), {bg_img_str} no-repeat center center fixed !important;
             background-size: cover !important;
         }}
