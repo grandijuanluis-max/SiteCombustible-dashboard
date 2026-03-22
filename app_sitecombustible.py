@@ -160,13 +160,13 @@ st.markdown(f"""
             font-weight: 600 !important;
             text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important; /* Fuerza de lectura extrema */
         }}
-        [data-testid="baseButton-primary"] {{
-            background-color: rgba(30, 58, 138, 0.45) !important;
+        button[kind="primary"] {{
+            background-color: rgba(255, 75, 75, 0.5) !important; /* Rojo puro pero translúcido (Glassmorphism) */
             border: 1px solid rgba(255, 255, 255, 0.25) !important;
             color: #ffffff !important;
         }}
-        [data-testid="baseButton-primary"]:hover {{
-            background-color: rgba(30, 58, 138, 0.9) !important;
+        button[kind="primary"]:hover {{
+            background-color: rgba(255, 75, 75, 0.8) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
         }}
         [data-testid="baseButton-secondary"] {{
