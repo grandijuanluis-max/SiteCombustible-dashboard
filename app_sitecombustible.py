@@ -137,7 +137,7 @@ st.markdown(f"""
         }}
         
         /* TIPOGRAFÍA FUTURISTA / LIMPIA */
-        html, body, [class*="st-"] {{
+        .stApp, .block-container {{
             font-family: 'Inter', sans-serif;
             color: #ffffff;
         }}
@@ -310,7 +310,7 @@ def check_login():
                                 r_norm = {str(k).strip().lower(): v for k, v in row.items()}
                                 
                                 user_val = str(r_norm.get('usuario', '')).strip().lower()
-                                mail_val = str(r_norm.get('mail', r_norm.get('email', r_norm.get('correo', '')))).strip().lower()
+                                mail_val = str(r_norm.get('mails', r_norm.get('mail', r_norm.get('email', r_norm.get('correo', ''))))).strip().lower()
                                 pwd_val = str(r_norm.get('password', r_norm.get('clave', r_norm.get('contraseña', '')))).strip()
 
                                 if (usr.strip().lower() in [user_val, mail_val] and usr.strip() != "") and (pwd == pwd_val):
