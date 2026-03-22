@@ -136,9 +136,22 @@ st.markdown(f"""
         }}
         
         /* TIPOGRAFÍA FUTURISTA / LIMPIA */
-        html, body, [class*="st-"]:not(.material-icons):not(.icon):not(i) {{
+        html, body, [class*="st-"] {{
             font-family: 'Inter', sans-serif;
             color: #ffffff;
+        }}
+        
+        /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
+        /* Al forzar 'Inter', rompimos las flechas del menú y los expanders. Esto lo repara: */
+        span[class*="material-symbols-rounded"], 
+        .stIcon, 
+        i[class*="icon"],
+        [class*="streamlit-expander-icon"] {{
+            font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+            font-style: normal !important;
+            font-variant: normal !important;
+            text-transform: none !important;
+            line-height: 1 !important;
         }}
         
         /* CORREGIR CONTRASTE DE LOS DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
