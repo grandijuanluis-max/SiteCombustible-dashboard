@@ -326,6 +326,11 @@ def check_login():
                                     
                             if not found:
                                 st.error("❌ Credenciales incorrectas o usuario inexistente.")
+                                with st.expander("🛠️ Diagnóstico de Seguridad (Dev)", expanded=True):
+                                    st.warning(f"Intentaste acceder con el texto exacto: '{usr}'")
+                                    st.write("Tu tabla de Usuarios dice exactamente esto:")
+                                    for idx_r, r in enumerate(users_data):
+                                        st.code(str(r), language="json")
                         except Exception as e:
                             if "WorksheetNotFound" in str(type(e)):
                                 st.error("⚠️ ERROR DEL SISTEMA: Falta crear la pestaña 'Usuarios' en tu Google Sheets maestro. Crea las columnas: Usuario | Mail | Password | Ingesta | Vision | Inercia | Mercado | Copiloto")
@@ -718,9 +723,9 @@ if app_page == "📈 INERCIA TEMPORAL":
         fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
         fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
         fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
-                           paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
-        fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.1)')
-        fig1.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
+                           paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+        fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        fig1.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
         st.plotly_chart(fig1, use_container_width=True)
 
         # Exportación Sutil (Expander)
@@ -758,11 +763,11 @@ if app_page == "📈 INERCIA TEMPORAL":
 
         fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
         fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                           paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+                           paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
         # Conservamos el orden cronológico estricto ocultando el datetime
         cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
-        fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.1)')
-        fig2.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
+        fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        fig2.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
         st.plotly_chart(fig2, use_container_width=True)
 
         col_exp2, _ = st.columns([1, 2])
@@ -832,10 +837,10 @@ if app_page == "🍩 PODER DE MERCADO":
             labels={'ult_provee': 'Proveedor', 'volumen': 'Volumen (Lts)', 'subti_comb': 'Producto'}
         )
         # Ordenamos: Mayor volumen ARRIBA de todo
-        fig_prov.update_yaxes(categoryorder='total ascending')
+        fig_prov.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
         fig_prov.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                               paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
-        fig_prov.update_xaxes(gridcolor='rgba(255,255,255,0.1)')
+                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+        fig_prov.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
         st.plotly_chart(fig_prov, use_container_width=True)
 
         # BLOQUE DE EXPORTACIÓN SUTIL (Expander)
@@ -872,7 +877,7 @@ if app_page == "🍩 PODER DE MERCADO":
             color_discrete_sequence=px.colors.qualitative.Prism
         )
         fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
-        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Exportación sutil para el Mix Global
@@ -973,9 +978,9 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             color_continuous_scale='RdYlGn',
             template="plotly_dark"
         )
-        fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.1)') # El más alto arriba
-        fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.1)')
-        fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.55)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
+        fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12)) # El más alto arriba
+        fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
         st.plotly_chart(fig_score, use_container_width=True)
 
         # Exportación Sutil del Ranking
