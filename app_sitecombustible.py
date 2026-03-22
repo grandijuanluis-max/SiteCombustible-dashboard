@@ -142,6 +142,18 @@ st.markdown(f"""
             color: #ffffff;
         }}
         
+        /* SIDEBAR Y NAVEGACIÓN - ALTO CONTRASTE */
+        /* Asegurar lectura nítida de los radios y subtítulos que Streamlit oscurece por defecto */
+        [data-testid="stSidebarNav"] *,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {{
+            color: #ffffff !important;
+            font-weight: 500 !important;
+        }}
+        
         /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
         /* Al forzar 'Inter', rompimos las flechas del menú y los expanders. Esto lo repara: */
         span[class*="material-symbols-rounded"], 
@@ -792,8 +804,10 @@ if app_page == "📈 INERCIA TEMPORAL":
             volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
         ).reset_index()
         
-        fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_white")
-        fig_prov.update_xaxes(categoryorder='total descending')
+        fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark")
+        fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+        fig_prov.update_layout(margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
         st.plotly_chart(fig_prov, use_container_width=True)
         
         col_exp_prov, _ = st.columns([1, 2])
