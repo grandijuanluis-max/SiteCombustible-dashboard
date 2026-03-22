@@ -169,15 +169,24 @@ st.markdown(f"""
             background-color: rgba(255, 75, 75, 0.8) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
         }}
-        [data-testid="baseButton-secondary"] {{
+        button[kind="secondary"] {{
             background-color: rgba(15, 23, 42, 0.6) !important; /* Apagar el blanco quemado por defecto */
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             color: #ffffff !important;
         }}
-        [data-testid="baseButton-secondary"]:hover {{
+        button[kind="secondary"]:hover {{
             background-color: rgba(15, 23, 42, 0.9) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
             color: #ffffff !important;
+        }}
+        
+        /* ETIQUETAS DE SELECTBOX Y RADIO BUTTONS: BLANCO EXTREMO PARA MAXIMA DESTAQUE */
+        [data-testid="stRadio"] label p, 
+        [data-testid="stSelectbox"] label p,
+        div[role="radiogroup"] label div {{
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important;
         }}
         
         /* EXPANDERS (MANTENER TRANSPARENCIA AL BRIRLOS Y NO PONERSE BLANCOS) */
