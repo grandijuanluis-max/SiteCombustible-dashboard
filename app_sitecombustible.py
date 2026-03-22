@@ -154,19 +154,45 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
-        /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES PRIMARIOS (APAGAR ROJO Y DAR LEGIBILIDAD) */
+        /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
             color: #ffffff !important;
-            font-weight: 500 !important;
+            font-weight: 600 !important;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important; /* Fuerza de lectura extrema */
         }}
         [data-testid="baseButton-primary"] {{
-            background-color: rgba(30, 58, 138, 0.45) !important; /* Azul tech translúcido en vez de rojo puro */
+            background-color: rgba(30, 58, 138, 0.45) !important;
             border: 1px solid rgba(255, 255, 255, 0.25) !important;
             color: #ffffff !important;
         }}
         [data-testid="baseButton-primary"]:hover {{
             background-color: rgba(30, 58, 138, 0.9) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        }}
+        [data-testid="baseButton-secondary"] {{
+            background-color: rgba(15, 23, 42, 0.6) !important; /* Apagar el blanco quemado por defecto */
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            color: #ffffff !important;
+        }}
+        [data-testid="baseButton-secondary"]:hover {{
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+            color: #ffffff !important;
+        }}
+        
+        /* EXPANDERS (MANTENER TRANSPARENCIA AL BRIRLOS Y NO PONERSE BLANCOS) */
+        [data-testid="stExpander"] details, 
+        [data-testid="stExpander"] summary {{
+            background-color: rgba(15, 23, 42, 0.2) !important;
+            border-radius: 8px !important;
+            color: #ffffff !important;
+        }}
+        [data-testid="stExpander"] {{
+            border: 1px solid rgba(255,255,255, 0.15) !important;
+            background-color: transparent !important;
+        }}
+        div[data-testid="stExpanderDetails"] {{
+            background-color: transparent !important;
         }}
         
         /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
