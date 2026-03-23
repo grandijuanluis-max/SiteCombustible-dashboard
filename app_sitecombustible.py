@@ -154,32 +154,7 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
-        /* HEADER NATIVO SIEMPRE VISIBLE Y FIJO (ESTILO APP NATIVA TIPO SEIDOR) */
-        header[data-testid="stHeader"] {{
-            background-color: rgba(15, 23, 42, 0.95) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-            position: fixed !important;
-            top: 0 !important;
-            z-index: 999999 !important;
-            transition: none !important; 
-            transform: translateY(0) !important; 
-            height: 3.5rem !important;
-            box-shadow: 0px 4px 15px rgba(0,0,0,0.5) !important;
-        }}
-        
-        /* LOGO Y TITULO INYECTADO DIRECTAMENTE EN EL HEADER PARA CELULARES */
-        header[data-testid="stHeader"]::after {{
-            content: '⛽ Neural Hub';
-            color: #ffffff;
-            font-weight: 700;
-            font-size: 1.3rem;
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            letter-spacing: 1px;
-            pointer-events: none;
-        }}
+
         
 
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
@@ -438,37 +413,6 @@ if 'df_master' not in st.session_state:
 df_master = st.session_state.df_master
 
 # ==========================================
-# 🏗️ ENRUTADOR PRINCIPAL (APOYADO AL TOPE DEL SIDEBAR)
-# ==========================================
-if 'app_page' not in st.session_state:
-    st.session_state.app_page = "🌐 HUB PRINCIPAL"
-
-def go_to(page):
-    st.session_state.app_page = page
-
-# Selector Visual Lateral
-st.sidebar.markdown("---")
-# Generación dinámica del menú basado en RBAC principal
-perms = st.session_state.get('user_perms', {})
-all_pages = ["🌐 HUB PRINCIPAL"]
-if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
-if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
-if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
-if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
-if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
-
-page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
-
-selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
-
-# Si el usuario hace click manual en el radio, sincronizamos el state
-if selected_page != st.session_state.app_page:
-    st.session_state.app_page = selected_page
-    st.rerun()
-
-app_page = st.session_state.app_page
-
-# ==========================================
 # 🖥️ FILTROS SIDEBAR
 # ==========================================
 st.sidebar.header("🕹️ Centro de Control")
@@ -538,6 +482,37 @@ if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isi
 
 vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
+
+# ==========================================
+# 🏗️ ENRUTADOR PRINCIPAL (LANDING HUB)
+# ==========================================
+if 'app_page' not in st.session_state:
+    st.session_state.app_page = "🌐 HUB PRINCIPAL"
+
+def go_to(page):
+    st.session_state.app_page = page
+
+# Selector Visual Lateral
+st.sidebar.markdown("---")
+# Generación dinámica del menú basado en RBAC
+perms = st.session_state.get('user_perms', {})
+all_pages = ["🌐 HUB PRINCIPAL"]
+if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
+if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
+if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
+if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
+if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+
+page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
+
+selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
+
+# Si el usuario hace click manual en el radio, sincronizamos el state
+if selected_page != st.session_state.app_page:
+    st.session_state.app_page = selected_page
+    st.rerun()
+
+app_page = st.session_state.app_page
 
 # --- TABLA DE ENRUTAMIENTO (ESTADO) ---
 if app_page == "🌐 HUB PRINCIPAL":
