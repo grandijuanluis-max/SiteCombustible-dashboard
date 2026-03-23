@@ -654,10 +654,27 @@ if app_page == "🚀 INGESTA & CARGA":
         
         bug_rows = df_new[df_new['nnumero'].astype(str).str.contains('1000019524', na=False)]
         if not bug_rows.empty:
-            with st.expander("🚨 ESCÁNER FORENSE: Análisis del NNumero 1000019524", expanded=True):
-                st.error("JL: Lee atentamente la columna `ACCION_FUTURA`. Fíjate si el sistema va a 'Insertarlos' o a 'Actualizarlos'. Si dice 'Actualizará' significa que SÍ sabe que ya están en el Google Sheet. Además, mira la columna `codigo`: uno es el producto 9267 y el otro el 9484. Al ser productos DIVERSOS en una misma factura, NO son un duplicado, son renglones separados.")
-                cols_to_show = ['ACCION_FUTURA', 'codigo', 'id_unique', 'debug_str', 'fecha_dt', 'formulario', 'nnumero', 'nombre', 'cantidad']
-                st.dataframe(bug_rows[[c for c in cols_to_show if c in bug_rows.columns]])
+            with st.expander("🚨 ESCÁNER FORENSE DEFINITIVO: Análisis del NNumero 1000019524", expanded=True):
+                st.error("JL: Tienes razón. La caja verde me confunde. Si te dice 'INSERTARÁ', es porque cree que no existe. Busquemos en vivo a esta bestia directamente adentro del Google Sheets que tengo en Memoria Ram:")
+                
+                master_bug = df_master[df_master['nnumero'].astype(str).str.contains('1000019524', na=False)].copy()
+                if not master_bug.empty:
+                    master_bug['debug_str'] = master_bug.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+                
+                c1, c2 = st.columns(2)
+                cols_to_show = ['id_unique', 'debug_str', 'codigo', 'cantidad']
+                
+                with c1:
+                    st.warning("📥 CÓMO SE LEE EN EL EXCEL NUEVO:")
+                    st.dataframe(bug_rows[[c for c in cols_to_show if c in bug_rows.columns]])
+                    
+                with c2:
+                    st.info("☁️ CÓMO ESTÁ VIVIENDO AHORA MISMO EN GOOGLE SHEETS:")
+                    if not master_bug.empty:
+                        st.dataframe(master_bug[[c for c in cols_to_show if c in master_bug.columns]])
+                    else:
+                        st.error("🚨 ¡ATENCIÓN! La factura 1000019524 NO ESTÁ en el Google Sheets en este momento. El sistema la va a insertar por primera vez. (¿Quizás bajaste un PDF de visualización y asumiste que estaba en la base?).")
+
                 
         # LOGICA DE UPSERT (Full Sync)
         # Combinamos la base vieja con el excel nuevo, eliminamos duplicados quedándonos con la versión del excel nuevo (last)
