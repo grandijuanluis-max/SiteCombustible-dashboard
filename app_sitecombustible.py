@@ -154,20 +154,23 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
-        /* NAVEGACIÓN NIVEL DIOS FIJA AL HACER SCROLL (STICKY TOP) */
-        [data-testid="stSidebarUserContent"] > div:first-child {{
+        /* NAVEGACIÓN SUPERIOR HORIZONTAL (STICKY TOP MAIN WINDOW) */
+        [data-testid="stMainBlockContainer"] > div:first-child {{
             position: sticky;
-            top: 0px;
-            z-index: 999;
-            background-color: rgba(15, 23, 42, 0.95); /* Cristal oscuro opaco para tapar filtros rodantes */
-            padding-bottom: 15px;
-            padding-top: 15px;
-            border-bottom: 1px solid rgba(255,255,255,0.1) !important;
-            margin-top: -1.5rem; /* Pegar perfectamente al techo */
-            padding-left: 1rem;
-            margin-left: -1rem;
-            margin-right: -1rem;
-            padding-right: 1rem;
+            top: 2rem;
+            z-index: 9999;
+            background-color: rgba(15, 23, 42, 0.70);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            border-radius: 12px;
+            padding: 5px 20px;
+            margin-bottom: 2rem;
+            box-shadow: 0px 8px 32px rgba(0,0,0,0.4);
+        }}
+        /* Ocultar el título base del radio para que sea totalmente sutil */
+        [data-testid="stMainBlockContainer"] > div:first-child label[data-testid="stWidgetLabel"] {{
+            display: none !important;
         }}
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
@@ -444,7 +447,7 @@ if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
 
 page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
 
-selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
+selected_page = st.radio("Navegación Nivel Dios", all_pages, index=page_idx, horizontal=True)
 
 # Si el usuario hace click manual en el radio, sincronizamos el state
 if selected_page != st.session_state.app_page:
@@ -452,8 +455,6 @@ if selected_page != st.session_state.app_page:
     st.rerun()
 
 app_page = st.session_state.app_page
-
-st.sidebar.markdown("---")
 
 # ==========================================
 # 🖥️ FILTROS SIDEBAR
