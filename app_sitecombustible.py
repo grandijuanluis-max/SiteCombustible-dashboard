@@ -648,12 +648,15 @@ if app_page == "🚀 INGESTA & CARGA":
         df_new['debug_str'] = df_new.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
         df_new['id_unique'] = df_new['debug_str'].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
         
-        # UI DIAGNOSTICO EN VIVO PARA EL USUARIO
+        # UI DIAGNOSTICO EN VIVO PARA EL USUARIO Y COMPROBACION DE GOOGLE SHEETS
+        master_ids = set(df_master['id_unique']) if not df_master.empty and 'id_unique' in df_master.columns else set()
+        df_new['ACCION_FUTURA'] = df_new['id_unique'].apply(lambda x: "🟢 SE ACTUALIZARÁ (Ya existe en Google Sheet)" if x in master_ids else "🟡 SE INSERTARÁ (Fila TOTALMENTE NUEVA)")
+        
         bug_rows = df_new[df_new['nnumero'].astype(str).str.contains('1000019524', na=False)]
         if not bug_rows.empty:
-            with st.expander("🚨 MODO DEBUG: Análisis Matemático MD5 (NNumero 1000019524)", expanded=True):
-                st.error("JL: He atrapado las filas rebeldes. Mira atentamente la columna `debug_str`. Ese es el texto EXACTO que usa el motor para crear el `id_unique`. Si hay 2 `id_unique` distintos, entonces la columna `debug_str` TIENE QUE SER DISTINTA letra por letra. Fíjate si hay algún espacio oculto, o un dígito extra en el código o cliente.")
-                cols_to_show = ['id_unique', 'debug_str', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'nombre', 'cantidad']
+            with st.expander("🚨 ESCÁNER FORENSE: Análisis del NNumero 1000019524", expanded=True):
+                st.error("JL: Lee atentamente la columna `ACCION_FUTURA`. Fíjate si el sistema va a 'Insertarlos' o a 'Actualizarlos'. Si dice 'Actualizará' significa que SÍ sabe que ya están en el Google Sheet. Además, mira la columna `codigo`: uno es el producto 9267 y el otro el 9484. Al ser productos DIVERSOS en una misma factura, NO son un duplicado, son renglones separados.")
+                cols_to_show = ['ACCION_FUTURA', 'codigo', 'id_unique', 'debug_str', 'fecha_dt', 'formulario', 'nnumero', 'nombre', 'cantidad']
                 st.dataframe(bug_rows[[c for c in cols_to_show if c in bug_rows.columns]])
                 
         # LOGICA DE UPSERT (Full Sync)
