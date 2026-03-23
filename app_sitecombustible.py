@@ -154,44 +154,7 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
-        /* NAVEGACIÓN SUPERIOR HORIZONTAL (FIXED MAIN WINDOW) */
-        [data-testid="stMainBlockContainer"] > div:first-child {{
-            position: fixed !important;
-            top: 3.8rem !important; /* Separado del header nativo de Streamlit */
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-            z-index: 999999 !important;
-            background-color: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.15) !important;
-            border-radius: 12px;
-            padding: 5px 20px;
-            width: max-content;
-            max-width: 95vw; /* Evita que desborde en celular */
-            box-shadow: 0px 8px 32px rgba(0,0,0,0.6);
-        }}
-        
-        /* Margen compensatorio para el título debajo del menú fijo */
-        [data-testid="stMainBlockContainer"] > div:nth-child(2) {{
-            margin-top: 70px !important;
-        }}
 
-        /* Ocultar el título base del radio para que sea totalmente sutil */
-        [data-testid="stMainBlockContainer"] > div:first-child label[data-testid="stWidgetLabel"] {{
-            display: none !important;
-        }}
-        
-        /* EVITAR COLAPSO EN CUADRADO EN CELULARES (FORZAR SCROLL HORIZONTAL) */
-        [data-testid="stMainBlockContainer"] > div:first-child div[role="radiogroup"] {{
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            -ms-overflow-style: none; /* IE y Edge */
-            scrollbar-width: none; /* Firefox */
-        }}
-        [data-testid="stMainBlockContainer"] > div:first-child div[role="radiogroup"]::-webkit-scrollbar {{
-            display: none; /* Chrome, Safari, Opera */
-        }}
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
             color: #ffffff !important;
@@ -448,35 +411,6 @@ if 'df_master' not in st.session_state:
 df_master = st.session_state.df_master
 
 # ==========================================
-# 🏗️ ENRUTADOR PRINCIPAL (LANDING HUB) STICKY TOP
-# ==========================================
-if 'app_page' not in st.session_state:
-    st.session_state.app_page = "🌐 HUB PRINCIPAL"
-
-def go_to(page):
-    st.session_state.app_page = page
-
-# Generación dinámica del menú basado en RBAC principal
-perms = st.session_state.get('user_perms', {})
-all_pages = ["🌐 HUB PRINCIPAL"]
-if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
-if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
-if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
-if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
-if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
-
-page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
-
-selected_page = st.radio("Navegación Nivel Dios", all_pages, index=page_idx, horizontal=True)
-
-# Si el usuario hace click manual en el radio, sincronizamos el state
-if selected_page != st.session_state.app_page:
-    st.session_state.app_page = selected_page
-    st.rerun()
-
-app_page = st.session_state.app_page
-
-# ==========================================
 # 🖥️ FILTROS SIDEBAR
 # ==========================================
 st.sidebar.header("🕹️ Centro de Control")
@@ -546,6 +480,37 @@ if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isi
 
 vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
+
+# ==========================================
+# 🏗️ ENRUTADOR PRINCIPAL (LANDING HUB)
+# ==========================================
+if 'app_page' not in st.session_state:
+    st.session_state.app_page = "🌐 HUB PRINCIPAL"
+
+def go_to(page):
+    st.session_state.app_page = page
+
+# Selector Visual Lateral
+st.sidebar.markdown("---")
+# Generación dinámica del menú basado en RBAC
+perms = st.session_state.get('user_perms', {})
+all_pages = ["🌐 HUB PRINCIPAL"]
+if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
+if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
+if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
+if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
+if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+
+page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
+
+selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
+
+# Si el usuario hace click manual en el radio, sincronizamos el state
+if selected_page != st.session_state.app_page:
+    st.session_state.app_page = selected_page
+    st.rerun()
+
+app_page = st.session_state.app_page
 
 # --- TABLA DE ENRUTAMIENTO (ESTADO) ---
 if app_page == "🌐 HUB PRINCIPAL":
