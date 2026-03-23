@@ -666,28 +666,54 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
         ag_map['Score'], ag_map['Nivel'] = calc.apply(lambda x: x[0]), calc.apply(lambda x: x[1])
 
         import time
-        col_exp_map, _ = st.columns([1, 2])
-        with col_exp_map.expander("🗺️ Ver Mapa de Calor Geográfico (Requiere carga extra)", expanded=False):
-            st.info("💡 El mapa térmico consulta coordenadas en vivo. Presiona el botón debajo para generarlo.")
-            if st.button("🚀 Renderizar Mapa Térmico", key="btn_render_mapa"):
-                with st.spinner("Geocodificando ubicaciones de mayor volumen (aprox 20 seg)..."):
-                    if 'geo' not in st.session_state: st.session_state.geo = {}
-                    geolocator = Nominatim(user_agent="sitecomb_vfinal_v51")
-                    for _, r in ag_map.sort_values("vol", ascending=False).head(20).iterrows():
-                        k = f"{r['localidad']}, {r['provincia']}"
-                        if k not in st.session_state.geo:
-                            try: 
-                                time.sleep(1.1)
-                                res = geolocator.geocode(f"{k}, Argentina")
-                                st.session_state.geo[k] = {"lat": res.latitude, "lon": res.longitude} if res else None
-                            except: 
-                                st.session_state.geo[k] = None
+        @st.cache_data(show_spinner=False)
+        def geocode_cached(localidad, provincia):
+            try:
+                # El sleep solo se activa la PRIMERA vez que se busca una ciudad (para evitar ban de IP). 
+                # Luego es instantáneo (0.01s) gracias a la memoria caché.
+                time.sleep(1.05) 
+                geolocator = Nominatim(user_agent="sitecomb_vfinal_vmax")
+                res = geolocator.geocode(f"{localidad}, {provincia}, Argentina")
+                if res: return {"lat": res.latitude, "lon": res.longitude}
+            except: pass
+            return None
 
-                    m_data = [[st.session_state.geo[k]['lat'], st.session_state.geo[k]['lon'], r['Score']] 
-                              for _, r in ag_map.iterrows() if (k := f"{r['localidad']}, {r['provincia']}") in st.session_state.geo and st.session_state.geo[k] is not None]
+        col_exp_map, _ = st.columns([1, 2])
+        with col_exp_map.expander("🗺️ Ver Mapa de Calor Geográfico (Motor Ultra-Rápido)", expanded=False):
+            st.info("💡 Este mapa usa un caché inteligente. La primera vez demora unos segundos, pero luego renderizará a velocidades extremas.")
+            if st.button("🚀 Renderizar Mapa Avanzado", key="btn_render_mapa"):
+                with st.spinner("Motor térmico buscando lat/lons (instantáneo si ya fue consultado)..."):
                     
-                    m = folium.Map(location=[-38.4, -63.6], zoom_start=5, tiles='cartodb positron')
-                    if m_data: HeatMap(m_data, radius=25, blur=20, min_opacity=0.3).add_to(m) 
+                    # Ampliamos a Top 30 para mejor densidad y contexto
+                    top_locs = ag_map.sort_values("vol", ascending=False).head(30)
+                    
+                    m = folium.Map(location=[-38.4, -63.6], zoom_start=5, tiles='cartodbdark_matter')
+                    m_data = []
+                    
+                    for _, r in top_locs.iterrows():
+                        coords = geocode_cached(r['localidad'], r['provincia'])
+                        if coords:
+                            lat, lon, score = coords['lat'], coords['lon'], r['Score']
+                            m_data.append([lat, lon, score])
+                            
+                            # Marcador Térmico Físico (Punto Exacto de Claridad Brutal)
+                            color_mk = "#ef4444" if score >= 5.0 else ("#eab308" if score >= 1.5 else "#3b82f6")
+                            folium.CircleMarker(
+                                location=[lat, lon],
+                                radius=max(4, min(score * 2.5, 18)), # Tamaño dinámico según score
+                                popup=f"<div style='min-width: 150px'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Total: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b></div>",
+                                tooltip=f"{r['localidad']}",
+                                color=color_mk,
+                                fill=True,
+                                fill_color=color_mk,
+                                fill_opacity=0.8,
+                                weight=1
+                            ).add_to(m)
+                            
+                    # Capa de Calor de fondo para mostrar la dispersión general y la "Inercia Térmica"
+                    if m_data: 
+                        HeatMap(m_data, radius=35, blur=25, min_opacity=0.4, gradient={0.2: '#0ea5e9', 0.6: '#eab308', 1.0: '#ef4444'}).add_to(m) 
+                    
                     folium_static(m, width=1150)
         
         st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
