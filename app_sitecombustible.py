@@ -251,6 +251,23 @@ st.markdown(f"""
 MESES_ORDEN = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
 MESES_MAP = {i+1: m for i, m in enumerate(MESES_ORDEN)}
 
+def robust_date_parse(serie_fechas):
+    is_num = pd.to_numeric(serie_fechas, errors='coerce')
+    mask_excel = is_num.notna() & (is_num > 30000)
+    
+    fechas_dt = pd.Series(pd.NaT, index=serie_fechas.index, dtype='datetime64[ns]')
+    if mask_excel.any():
+        fechas_dt[mask_excel] = pd.to_datetime(is_num[mask_excel], unit='D', origin='1899-12-30')
+        
+    mask_str = ~mask_excel & serie_fechas.notna()
+    if mask_str.any():
+        fechas_dt[mask_str] = pd.to_datetime(serie_fechas[mask_str], errors='coerce', dayfirst=True)
+        mask_todavia_nat = fechas_dt.isna() & mask_str
+        if mask_todavia_nat.any():
+            fechas_dt[mask_todavia_nat] = pd.to_datetime(serie_fechas[mask_todavia_nat], errors='coerce')
+            
+    return fechas_dt
+
 # ==========================================
 # 🔐 GESTIÓN DE DATOS (HIGH PERFORMANCE)
 # ==========================================
@@ -275,7 +292,10 @@ def load_data():
         df.columns = df.columns.astype(str).str.strip().str.lower()
         # Eliminado rename conflictivo
         if not df.empty:
-            df['fecha_dt'] = pd.to_datetime(df.get('fecha'), errors='coerce', dayfirst=True)
+            if 'fecha' in df.columns:
+                df['fecha_dt'] = robust_date_parse(df['fecha'])
+            else:
+                df['fecha_dt'] = pd.NaT
             df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
             df['mes'] = df['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
             if "cantidad" in df.columns:
@@ -604,7 +624,7 @@ if app_page == "🚀 INGESTA & CARGA":
             df_new["venta_total"] = df_new["precio"] * df_new["cantidad"]
         
         if 'fecha' in df_new.columns:
-            df_new['fecha_dt'] = pd.to_datetime(df_new['fecha'], errors='coerce', dayfirst=True)
+            df_new['fecha_dt'] = robust_date_parse(df_new['fecha'])
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
             df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
         
