@@ -601,6 +601,8 @@ if app_page == "🚀 INGESTA & CARGA":
             st.rerun()
             
     up_file = st.file_uploader("Subir Archivo", type=["xlsx", "csv"])
+    invertir_fechas = st.checkbox("🔄 Invertir Día y Mes Automáticamente (Marcar SÓLO si el archivo tomó los meses al revés, ej: Enero en vez del real Febrero)", value=False)
+    
     if up_file:
         file_id = hashlib.md5(up_file.getvalue()).hexdigest()
         if "last_id" not in st.session_state or st.session_state.last_id != file_id:
@@ -641,6 +643,17 @@ if app_page == "🚀 INGESTA & CARGA":
         
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = robust_date_parse(df_new['fecha'])
+            
+            if invertir_fechas:
+                def swap_dm(d):
+                    if pd.isnull(d): return d
+                    try:
+                        # Geometría inversa forzada
+                        return d.replace(day=d.month, month=d.day)
+                    except ValueError:
+                        return d # Ignora colisiones si día es > 12 (ej 2020-01-25)
+                df_new['fecha_dt'] = df_new['fecha_dt'].apply(swap_dm)
+                
             df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
             df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
         
