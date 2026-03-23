@@ -154,23 +154,43 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         
-        /* NAVEGACIÓN SUPERIOR HORIZONTAL (STICKY TOP MAIN WINDOW) */
+        /* NAVEGACIÓN SUPERIOR HORIZONTAL (FIXED MAIN WINDOW) */
         [data-testid="stMainBlockContainer"] > div:first-child {{
-            position: sticky;
-            top: 2rem;
-            z-index: 9999;
-            background-color: rgba(15, 23, 42, 0.70);
+            position: fixed !important;
+            top: 3.8rem !important; /* Separado del header nativo de Streamlit */
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            z-index: 999999 !important;
+            background-color: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1) !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
             border-radius: 12px;
             padding: 5px 20px;
-            margin-bottom: 2rem;
-            box-shadow: 0px 8px 32px rgba(0,0,0,0.4);
+            width: max-content;
+            max-width: 95vw; /* Evita que desborde en celular */
+            box-shadow: 0px 8px 32px rgba(0,0,0,0.6);
         }}
+        
+        /* Margen compensatorio para el título debajo del menú fijo */
+        [data-testid="stMainBlockContainer"] > div:nth-child(2) {{
+            margin-top: 70px !important;
+        }}
+
         /* Ocultar el título base del radio para que sea totalmente sutil */
         [data-testid="stMainBlockContainer"] > div:first-child label[data-testid="stWidgetLabel"] {{
             display: none !important;
+        }}
+        
+        /* EVITAR COLAPSO EN CUADRADO EN CELULARES (FORZAR SCROLL HORIZONTAL) */
+        [data-testid="stMainBlockContainer"] > div:first-child div[role="radiogroup"] {{
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -ms-overflow-style: none; /* IE y Edge */
+            scrollbar-width: none; /* Firefox */
+        }}
+        [data-testid="stMainBlockContainer"] > div:first-child div[role="radiogroup"]::-webkit-scrollbar {{
+            display: none; /* Chrome, Safari, Opera */
         }}
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
