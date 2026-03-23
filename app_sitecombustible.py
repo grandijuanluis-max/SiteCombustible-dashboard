@@ -645,8 +645,17 @@ if app_page == "🚀 INGESTA & CARGA":
             df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
         
         # Identificador Único Estricto (Regla de Negocio JL: Fecha + Cliente + Producto + Formulario + NNumero)
-        df_new['id_unique'] = df_new.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
+        df_new['debug_str'] = df_new.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+        df_new['id_unique'] = df_new['debug_str'].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
         
+        # UI DIAGNOSTICO EN VIVO PARA EL USUARIO
+        bug_rows = df_new[df_new['nnumero'].astype(str).str.contains('1000019524', na=False)]
+        if not bug_rows.empty:
+            with st.expander("🚨 MODO DEBUG: Análisis Matemático MD5 (NNumero 1000019524)", expanded=True):
+                st.error("JL: He atrapado las filas rebeldes. Mira atentamente la columna `debug_str`. Ese es el texto EXACTO que usa el motor para crear el `id_unique`. Si hay 2 `id_unique` distintos, entonces la columna `debug_str` TIENE QUE SER DISTINTA letra por letra. Fíjate si hay algún espacio oculto, o un dígito extra en el código o cliente.")
+                cols_to_show = ['id_unique', 'debug_str', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'nombre', 'cantidad']
+                st.dataframe(bug_rows[[c for c in cols_to_show if c in bug_rows.columns]])
+                
         # LOGICA DE UPSERT (Full Sync)
         # Combinamos la base vieja con el excel nuevo, eliminamos duplicados quedándonos con la versión del excel nuevo (last)
         df_merged = pd.concat([df_master, df_new]).drop_duplicates(subset=['id_unique'], keep='last')
