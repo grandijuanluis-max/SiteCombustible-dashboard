@@ -253,11 +253,13 @@ MESES_MAP = {i+1: m for i, m in enumerate(MESES_ORDEN)}
 
 def robust_date_parse(serie_fechas):
     is_num = pd.to_numeric(serie_fechas, errors='coerce')
-    mask_excel = is_num.notna() & (is_num > 30000)
+    # Protegido estrictamente contra OutOfBoundsDatetime (Pandas crashea de raíz con values > 80000 o muy ridículos al calcular desde 1899)
+    mask_excel = is_num.notna() & (is_num > 30000) & (is_num < 80000)
     
     fechas_dt = pd.Series(pd.NaT, index=serie_fechas.index, dtype='datetime64[ns]')
     if mask_excel.any():
-        fechas_dt[mask_excel] = pd.to_datetime(is_num[mask_excel], unit='D', origin='1899-12-30')
+        # Forzar un errors='coerce' extra para seguridad absoluta
+        fechas_dt[mask_excel] = pd.to_datetime(is_num[mask_excel], unit='D', origin='1899-12-30', errors='coerce')
         
     mask_str = ~mask_excel & serie_fechas.notna()
     if mask_str.any():
