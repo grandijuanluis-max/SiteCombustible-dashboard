@@ -263,10 +263,22 @@ def robust_date_parse(serie_fechas):
         
     mask_str = ~mask_excel & serie_fechas.notna()
     if mask_str.any():
-        fechas_dt[mask_str] = pd.to_datetime(serie_fechas[mask_str], errors='coerce', dayfirst=True)
-        mask_todavia_nat = fechas_dt.isna() & mask_str
-        if mask_todavia_nat.any():
-            fechas_dt[mask_todavia_nat] = pd.to_datetime(serie_fechas[mask_todavia_nat], errors='coerce')
+        s_str = serie_fechas[mask_str].astype(str).str.strip()
+        
+        # 1. Blindaje ISO 8601: Evitar que Pandas voltee los meses en los strings YYYY-MM-DD bajados de Google Sheets
+        fechas_iso = pd.to_datetime(s_str, format='%Y-%m-%d', errors='coerce')
+        
+        # 2. Las que fallaron, seguro son Excel del usuario en DD/MM/YYYY, les forzamos dayfirst
+        mask_falla_iso = fechas_iso.isna()
+        if mask_falla_iso.any():
+            fechas_iso[mask_falla_iso] = pd.to_datetime(s_str[mask_falla_iso], errors='coerce', dayfirst=True)
+            
+        # 3. Fallback genérico para mutantes sin formato
+        mask_todavia = fechas_iso.isna()
+        if mask_todavia.any():
+            fechas_iso[mask_todavia] = pd.to_datetime(s_str[mask_todavia], errors='coerce')
+            
+        fechas_dt[mask_str] = fechas_iso
             
     return fechas_dt
 
@@ -353,8 +365,8 @@ def save_to_google_sheets(df_to_save, mode='full'):
         df_export = df_to_save.copy()
         
         if 'fecha_dt' in df_export.columns:
-            # Forzamos formato universal de base de datos para prevenir inversiones día/mes
-            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%Y-%m-%d')
+            # Pedido expreso del usuario: Visualizar DD/MM/YYYY puramente en Google Sheets
+            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
             
         headers = list(df_export.columns)
         
