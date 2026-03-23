@@ -270,6 +270,12 @@ def robust_date_parse(serie_fechas):
             
     return fechas_dt
 
+def normalize_id_col(val):
+    s = str(val).strip().upper()
+    if s.endswith('.0'): s = s[:-2]
+    if s in ['NAN', 'NAT', 'NONE', '']: return 'S/D'
+    return s
+
 # ==========================================
 # 🔐 GESTIÓN DE DATOS (HIGH PERFORMANCE)
 # ==========================================
@@ -319,6 +325,10 @@ def load_data():
             # Prevenir colapsos si el archivo subido no tenía las columnas esperadas por los gráficos
             for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
                 if c not in df.columns: df[c] = "S/D"
+                
+            # Normalización Extremadamente Estricta para no duplicar IDs nunca más debido a ".0" fantasma de Pandas
+            for c in ['formulario', 'nnumero', 'codigo', 'nombre']:
+                if c in df.columns: df[c] = df[c].apply(normalize_id_col)
                 
             # Identidad robusta usando fecha_dt formateada para evitar asimetrías
             df['id_unique'] = df.apply(lambda r: hashlib.md5(f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}".encode()).hexdigest(), axis=1)
@@ -608,6 +618,10 @@ if app_page == "🚀 INGESTA & CARGA":
         # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
         for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
             if c not in df_new.columns: df_new[c] = "S/D"
+
+        # Normalización Extremadamente Estricta pre-hashing para eliminar .0 rebeldes de Pandas
+        for c in ['formulario', 'nnumero', 'codigo', 'nombre']:
+            if c in df_new.columns: df_new[c] = df_new[c].apply(normalize_id_col)
 
         # Aseguramos columnas numéricas sin S/D de manera segura evitando Null Pointers
         if "cantidad" in df_new.columns:
