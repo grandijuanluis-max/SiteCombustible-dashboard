@@ -14,6 +14,7 @@ from google.oauth2.service_account import Credentials
 from geopy.geocoders import Nominatim
 from fpdf import FPDF
 from datetime import datetime, date, timedelta
+import google.generativeai as genai
 
 # ==========================================
 # 📑 MOTOR DE EXPORTACIÓN CORPORATIVA (HELPER FUNCTIONS)
@@ -103,28 +104,28 @@ else:
 
 st.markdown(f"""
         <style>
-        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA DE ORO NEGRO) */
+        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE */
         [data-testid="stAppViewContainer"],
         [data-testid="stFullScreenFrame"] {{
-            background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), {bg_img_str} no-repeat center center fixed !important;
+            background: linear-gradient(rgba(10, 25, 60, 0.45), rgba(10, 25, 60, 0.45)), {bg_img_str} no-repeat center center fixed !important;
             background-size: cover !important;
         }}
         
-        /* HEADER TOTALMENTE INVISIBLE PARA NO ROMPER LA MAGIA */
+        /* HEADER TOTALMENTE INVISIBLE */
         [data-testid="stHeader"] {{
             background-color: transparent !important;
         }}
         
-        /* SIDEBAR DE CRISTAL OSCURO PERO MUY TRANSPARENTE */
+        /* SIDEBAR DE CRISTAL AZULADO */
         [data-testid="stSidebar"] {{
-            background-color: rgba(15, 23, 42, 0.40) !important;
+            background-color: rgba(15, 30, 70, 0.50) !important;
             backdrop-filter: blur(25px) !important;
             border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
         }}
         
-        /* CONTENT CENTRAL - GLASSMORPHISM SUPREMO (NEGRO AZULADO MUY TRANSPARENTE) */
+        /* CONTENT CENTRAL - GLASSMORPHISM AZUL PROFUNDO */
         .main .block-container {{
-            background-color: rgba(15, 23, 42, 0.45) !important;
+            background-color: rgba(10, 25, 60, 0.55) !important;
             padding: 3rem !important;
             border-radius: 24px !important;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9) !important;
@@ -142,8 +143,68 @@ st.markdown(f"""
             color: #ffffff;
         }}
         
+        /* SOBREESCRITURA BLANCA GLOBAL (Tema Light pero Apariencia Dark via CSS) */
+        .main .block-container h1,
+        .main .block-container h2,
+        .main .block-container h3,
+        .main .block-container h4,
+        .main .block-container p,
+        .main .block-container label,
+        .main .block-container li,
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] * {{
+            color: #ffffff !important;
+        }}
+        /* Métricas (st.metric) */
+        [data-testid="stMetric"] label,
+        [data-testid="stMetric"] [data-testid="stMetricValue"],
+        [data-testid="stMetric"] [data-testid="stMetricDelta"] {{
+            color: #ffffff !important;
+        }}
+        
+        /* ======================================================= */
+        /* CAMPOS DE TEXTO: Fondo claro + Texto oscuro = LEGIBLE   */
+        /* ======================================================= */
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        input[type="email"],
+        textarea,
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea,
+        [data-testid="stNumberInput"] input,
+        .stTextInput input,
+        .stTextArea textarea {{
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border: 1px solid rgba(100, 120, 180, 0.5) !important;
+            border-radius: 8px !important;
+            caret-color: #1e3a8a !important;
+        }}
+        input::placeholder,
+        textarea::placeholder {{
+            color: #94a3b8 !important;
+        }}
+        [data-testid="stTextInput"] label,
+        [data-testid="stTextArea"] label,
+        [data-testid="stNumberInput"] label {{
+            color: #ffffff !important;
+        }}
+        /* DATE INPUT */
+        [data-testid="stDateInput"] input {{
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+        }}
+        
+        /* FORMULARIOS (st.form) */
+        [data-testid="stForm"] {{
+            background-color: rgba(15, 30, 70, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 12px !important;
+            padding: 1.5rem !important;
+        }}
+        
         /* SIDEBAR Y NAVEGACIÓN - ALTO CONTRASTE */
-        /* Asegurar lectura nítida de los radios y subtítulos que Streamlit oscurece por defecto */
         [data-testid="stSidebarNav"] *,
         [data-testid="stSidebar"] label,
         [data-testid="stSidebar"] p,
@@ -153,37 +214,34 @@ st.markdown(f"""
             color: #ffffff !important;
             font-weight: 500 !important;
         }}
-        
-
-        
 
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
             color: #ffffff !important;
             font-weight: 600 !important;
-            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important; /* Fuerza de lectura extrema */
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important;
         }}
         button[kind="primary"] {{
-            background-color: rgba(255, 75, 75, 0.5) !important; /* Rojo puro pero translúcido (Glassmorphism) */
+            background-color: rgba(30, 58, 138, 0.7) !important;
             border: 1px solid rgba(255, 255, 255, 0.25) !important;
             color: #ffffff !important;
         }}
         button[kind="primary"]:hover {{
-            background-color: rgba(255, 75, 75, 0.8) !important;
+            background-color: rgba(30, 58, 138, 0.95) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
         }}
         button[kind="secondary"] {{
-            background-color: rgba(15, 23, 42, 0.6) !important; /* Apagar el blanco quemado por defecto */
+            background-color: rgba(15, 30, 70, 0.6) !important;
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             color: #ffffff !important;
         }}
         button[kind="secondary"]:hover {{
-            background-color: rgba(15, 23, 42, 0.9) !important;
+            background-color: rgba(15, 30, 70, 0.9) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
             color: #ffffff !important;
         }}
         
-        /* ETIQUETAS DE SELECTBOX Y RADIO BUTTONS: BLANCO EXTREMO PARA MAXIMA DESTAQUE */
+        /* ETIQUETAS DE SELECTBOX Y RADIO BUTTONS */
         [data-testid="stRadio"] label p, 
         [data-testid="stSelectbox"] label p,
         div[role="radiogroup"] label div {{
@@ -192,10 +250,10 @@ st.markdown(f"""
             text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important;
         }}
         
-        /* EXPANDERS (MANTENER TRANSPARENCIA AL BRIRLOS Y NO PONERSE BLANCOS) */
+        /* EXPANDERS (AZUL TRANSPARENTE) */
         [data-testid="stExpander"] details, 
         [data-testid="stExpander"] summary {{
-            background-color: rgba(15, 23, 42, 0.2) !important;
+            background-color: rgba(15, 30, 70, 0.3) !important;
             border-radius: 8px !important;
             color: #ffffff !important;
         }}
@@ -207,8 +265,7 @@ st.markdown(f"""
             background-color: transparent !important;
         }}
         
-        /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
-        /* Al forzar 'Inter', rompimos las flechas del menú y los expanders. Esto lo repara: */
+        /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT */
         span[class*="material-symbols-rounded"], 
         .stIcon, 
         i[class*="icon"],
@@ -220,20 +277,20 @@ st.markdown(f"""
             line-height: 1 !important;
         }}
         
-        /* CORREGIR CONTRASTE DE LOS DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
+        /* DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
         div[data-baseweb="select"] > div {{
-            background-color: #f8fafc !important; /* Fondo claro de la barra de busqueda */
+            background-color: #f8fafc !important;
             color: #0f172a !important;
         }}
         div[data-baseweb="select"] * {{
-            color: #0f172a !important; /* Texto oscuro cuando escribimos */
+            color: #0f172a !important;
         }}
         div[data-baseweb="popover"] * {{
-            color: #0f172a !important; /* Fuerza Oscuro a TODA la lista interior (ej. CHACO) */
+            color: #0f172a !important;
             font-weight: 600 !important;
         }}
         div[data-baseweb="menu"], div[data-baseweb="popover"] {{
-            background-color: #f8fafc !important; /* Fondo claro de la lista desplegada */
+            background-color: #f8fafc !important;
         }}
         
         /* Píldoras elegidas en múltiple selección */
@@ -241,7 +298,27 @@ st.markdown(f"""
             background-color: #1e3a8a !important;
         }}
         span[data-baseweb="tag"] * {{
-            color: #ffffff !important; /* Fuerza el blanco de vuelta DENTRO de la píldora azul */
+            color: #ffffff !important;
+        }}
+        
+        /* TABLAS (st.dataframe) - TEXTO OSCURO SOBRE FONDO BLANCO */
+        [data-testid="stDataFrame"] * {{
+            color: #0f172a !important;
+        }}
+        [data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] {{
+            background-color: #ffffff !important;
+            border-radius: 8px !important;
+        }}
+        [data-testid="stDataFrame"] th,
+        [data-testid="stDataFrame"] [role="columnheader"] {{
+            color: #ffffff !important;
+            background-color: rgba(30, 58, 138, 0.9) !important;
+            font-weight: 700 !important;
+        }}
+        [data-testid="stDataFrame"] td,
+        [data-testid="stDataFrame"] [role="gridcell"] {{
+            color: #0f172a !important;
+            font-weight: 500 !important;
         }}
         
         footer {{visibility: hidden;}}
@@ -1201,5 +1278,68 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             else:
                 btn_scx = generar_excel_corporativo(top_20, "xlsx")
                 st.download_button("Descargar Excel de Score", btn_scx, "Ranking_Score.xlsx")
+
+        # --- NUEVO MOTOR DE IA GEMINI STREAMLIT ANALYTICS PATTERN ---
+        st.markdown("---")
+        st.subheader("🤖 Consultoría Analítica IA (Nivel Dios)")
+        
+        # Generación de Contexto Resumido para el Motor sin superar Token Limits
+        with st.spinner("Compilando historia para el Motor Neuronal..."):
+            resumen_ia = dff.groupby(['anio', 'mes', 'provincia', 'subti_comb']).agg(
+                Volumen_Lts=pd.NamedAgg(column="cantidad", aggfunc="sum"),
+                Facturacion=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+            # Convertimos a string consolidado
+            context_string = resumen_ia.to_string(index=False)
+            
+        st.info("💡 Hazle cualquier pregunta a la Inteligencia Artificial sobre los volúmenes, zonas y estacionalidad mostrada arriba.")
+
+        col_ia1, col_ia2, col_ia3 = st.columns(3)
+        accion_ia = None
+        if col_ia1.button("📊 Generar Informe Ejecutivo", use_container_width=True): 
+            accion_ia = "Genera un informe ejecutivo profesional analizando el rendimiento volumétrico histórico total y destaca la mejor provincia."
+        if col_ia2.button("🚨 Escáner Crítico de Fugas", use_container_width=True): 
+            accion_ia = "Analiza estos datos históricos e identifica si hay algún mes o provincia con caídas drásticas de volumen que represeten un riesgo de fuga."
+        if col_ia3.button("💡 Estrategia de Crecimiento", use_container_width=True): 
+            accion_ia = "Actúa como consultor de negocios corporativo y propón un plan de acción de 3 pasos basados estrictamente en las zonas de oportunidad que veas en estos datos."
+
+        pregunta_ia = st.text_area("Consulta Libre al Motor Neuronal:", placeholder="Ej: ¿Cuáles son nuestros productos más fuertes en la provincia de Santa Fe?", height=100)
+        prompt_final = accion_ia if accion_ia else pregunta_ia
+
+        if st.button("🧠 Procesar con IA Nivel Dios", type="primary", use_container_width=True):
+            if prompt_final:
+                try:
+                    # Inicializamos el motor IA bajo demanda
+                    api_key_test = st.secrets.get("gemini_api_key", "")
+                    if api_key_test == "":
+                        st.error("⚠️ La clave 'gemini_api_key' no está configurada en .streamlit/secrets.toml. Configúrala para despertar a la IA.")
+                    else:
+                        genai.configure(api_key=api_key_test)
+                        modelo = genai.GenerativeModel('gemini-1.5-flash') 
+                        
+                        system_prompt = f"""
+                        ERES EL DIRECTOR DE ESTRATEGIA Y ANALISTA DE DATOS TOP DE: JUAN LUIS CORPORATIONS (SiteCombustible Pro).
+                        INSTRUCCIÓN CRÍTICA: Debes responder EXCLUSIVAMENTE basado en la TABLA HISTÓRICA que se anexa a continuación.
+                        El usuario te hará preguntas estratégicas. Debes responder con tono ejecutivo, corporativo y nivel Dios (muy seguro de ti mismo e inteligente).
+                        Si no puedes responder algo con los datos de esta tabla, dímelo claramente. Usa Markdown para destacar nombres y números.
+                        
+                        TABLA HISTÓRICA RESUMIDA (Agrupada por Año, Mes, Provincia y Producto):
+                        {context_string}
+                        
+                        SOLICITUD DEL GERENTE GENERAL: {prompt_final}
+                        """
+                        
+                        with st.spinner("⏳ La Inteligencia Artificial está procesando millones de parámetros..."):
+                            respuesta = modelo.generate_content(system_prompt)
+                            
+                        st.success("✅ Análisis Computado")
+                        st.markdown(f"<div style='background-color:rgba(15,23,42,0.8); padding:2rem; border-radius:12px; border:1px solid rgba(255,255,255,0.2); font-size: 1.05rem;'>{respuesta.text}</div>", unsafe_allow_html=True)
+                except Exception as e:
+                    st.error("⚠️ Ocurrió un error en la capa pre-frontal de la IA.")
+                    with st.expander("🛠️ Diagnóstico del Excepcionador (Dev)"):
+                        st.write(str(e))
+            else:
+                st.warning("Escribe algo o presiona uno de los 3 botones superiores para cargar un propmpo_generativeai)")
+
     else:
         st.warning("⚠️ Sin datos para procesar en el Copiloto Estratégico.")

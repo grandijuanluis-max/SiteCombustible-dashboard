@@ -10,3 +10,4 @@ fpdf
 xlsxwriter
 openpyxl
 altair<5.0.0
+google-generativeai
