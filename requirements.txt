@@ -11,3 +11,5 @@ xlsxwriter
 openpyxl
 altair<5.0.0
 google-generativeai
+google-api-python-client
+paramiko
