@@ -18,15 +18,22 @@ from googleapiclient.http import MediaIoBaseDownload
 # Cambiar esto para dictar de dónde el robot absorberá los Excel/CSV
 MODO_EJECUCION = 'DRIVE' 
 
-# ==========================================
-# ⚙️ CONFIGURACIÓN DE CONEXIÓN A LA BÓVEDA
-# ==========================================
-# URL deducida de tu captura de pantalla
+# Intento dinámico y 100% nativo de leer tu archivo oculto
+import os
 SUPABASE_URL = "https://ewwdsiewmdwbxoiguoas.supabase.co"
+SUPABASE_KEY = "CLAVE_OCULTA_POR_SEGURIDAD"
 
-# ACA VAS A PEGAR LA CLAVE COMPLETA sb_secret_...
-# (Reemplazá esto por la clave real que sacaste de Supabase)
-SUPABASE_KEY = "CLAVE_OCULTA_POR_SEGURIDAD" 
+try:
+    dir_base = os.path.dirname(os.path.abspath(__file__))
+    ruta_secretos = os.path.join(dir_base, ".streamlit", "secrets.toml")
+    with open(ruta_secretos, "r", encoding="utf-8") as f:
+        for line in f:
+            if "SUPABASE_URL" in line and "=" in line:
+                SUPABASE_URL = line.split("=")[1].strip().strip('"').strip("'")
+            if "SUPABASE_KEY" in line and "=" in line:
+                SUPABASE_KEY = line.split("=")[1].strip().strip('"').strip("'")
+except Exception as e:
+    print(f"⚠️ No se pudo leer el archivo oculto local: {e}") 
 
 print("🔌 Conectando a Supabase (Bóveda Central)...")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)

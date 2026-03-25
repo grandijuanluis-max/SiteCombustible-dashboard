@@ -4,6 +4,7 @@ import folium
 from folium.plugins import HeatMap
 from streamlit_folium import folium_static, st_folium
 import plotly.express as px
+import plotly.graph_objects as go
 import os
 import json
 import time
@@ -1101,6 +1102,20 @@ if app_page == "🍩 PODER DE MERCADO":
         fig_pie.update_layout(height=450, margin=dict(t=30, b=30), legend=dict(font=dict(color='#ffffff', size=13), title=dict(text='Combustible', font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
         st.plotly_chart(fig_pie, use_container_width=True)
 
+        st.markdown("---")
+        st.markdown("#### 3. Batalla por el Dominio Territorial (Share de Banderas)")
+        if 'bandera' in dff.columns:
+            ag_bandera = dff.groupby(['bandera', 'subti_comb']).agg(volumen=("volumen", "sum")).reset_index()
+            fig_bandera = px.bar(
+                ag_bandera, y='bandera', x='volumen', color='subti_comb',
+                orientation='h', template="plotly_dark",
+                labels={'bandera': 'Marca / Bandera', 'volumen': 'Litros'}
+            )
+            fig_bandera.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+            fig_bandera.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_bandera.update_layout(height=450, margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1))
+            st.plotly_chart(fig_bandera, use_container_width=True)
+
         # Exportación sutil para el Mix Global
         col_exp4, _ = st.columns([1, 2])
         with col_exp4.expander("📥 Exportar Reporte de Mix Global", expanded=False):
@@ -1134,17 +1149,47 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             
             variacion = ((v_actual - v_anterior) / v_anterior) * 100 if v_anterior > 0 else 0
             
-            c1, c2 = st.columns([1, 2])
-            with c1:
-                st.metric(
-                    label=f"Aceleración Comercial ({periodo_act})", 
-                    value=f"{v_actual:,.0f} Lts", 
-                    delta=f"{variacion:.2f}% vs Mes Ant."
-                )
-            with c2:
-                st.info(f"**Interpretación Gerencial:** El despacho presenta una variación del **{variacion:.2f}%**. "
-                        "Un valor positivo indica que el camión está ganando tracción; un valor negativo es una "
-                        "alerta de enfriamiento que requiere revisión de precios o promociones.")
+            # ======= EL "VELOCÍMETRO" (GAUGE CHART) =======
+            st.markdown("#### 🏎️ Tacómetro de Velocidad Comercial")
+            c_gauge, c_txt = st.columns([1.5, 1])
+            
+            with c_gauge:
+                fig_gauge = go.Figure(go.Indicator(
+                    mode = "gauge+number+delta",
+                    value = v_actual,
+                    domain = {'x': [0, 1], 'y': [0, 1]},
+                    title = {'text': f"Litros Vendidos ({periodo_act})", 'font': {'size': 20, 'color': 'white'}},
+                    delta = {'reference': v_anterior, 'valueformat': ',.0f', 'position': "top", 'increasing': {'color': '#22c55e'}, 'decreasing': {'color': '#ef4444'}},
+                    number = {'valueformat': ',.0f', 'font': {'color': 'white'}},
+                    gauge = {
+                        'axis': {'range': [None, max(v_actual, v_anterior) * 1.5], 'tickwidth': 1, 'tickcolor': "white"},
+                        'bar': {'color': "#3b82f6", 'thickness': 0.25},
+                        'bgcolor': "rgba(0,0,0,0)",
+                        'borderwidth': 2,
+                        'bordercolor': "gray",
+                        'steps': [
+                            {'range': [0, v_anterior * 0.8], 'color': 'rgba(239, 68, 68, 0.4)'}, # Zona Roja
+                            {'range': [v_anterior * 0.8, v_anterior * 1.05], 'color': 'rgba(234, 179, 8, 0.4)'}, # Zona Amarilla
+                            {'range': [v_anterior * 1.05, max(v_actual, v_anterior) * 1.5], 'color': 'rgba(34, 197, 94, 0.4)'} # Zona Verde
+                        ],
+                        'threshold': {
+                            'line': {'color': "white", 'width': 4},
+                            'thickness': 0.75,
+                            'value': v_anterior
+                        }
+                    }
+                ))
+                fig_gauge.update_layout(height=350, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color': "white"})
+                st.plotly_chart(fig_gauge, use_container_width=True)
+
+            with c_txt:
+                st.info(f"**Interpretación Gerencial:** El despacho presenta una variación del **{variacion:.2f}%** respecto al mes anterior.")
+                if variacion > 5:
+                    st.success("🚀 **Motor a tope:** El camión está ganando tracción fuerte. ¡Momento de acelerar adquisiciones!")
+                elif variacion >= -5:
+                    st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de ventas estable. Sin grandes riesgos a la vista.")
+                else:
+                    st.error("📉 **Desaceleración (Alerta):** El volumen está cayendo. Sugerencia: Revisar táctica agresiva en la Matriz de Dominancia Zonal o inyectar Cuenta Corriente.")
 
         st.markdown("---")
 
@@ -1177,6 +1222,23 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                     st.download_button("Descargar Excel de Riesgos", btn_rx, "Alertas_Riesgo.xlsx")
         else:
             st.success("✅ No se detectan zonas con concentración crítica de clientes en el filtro actual.")
+
+        st.markdown("---")
+        st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
+        if 'condicion' in dff.columns:
+            ag_cond = dff.groupby(['condicion']).agg(
+                volumen=("volumen", "sum"),
+                ventas=("venta_total", "sum")
+            ).reset_index()
+            fig_cond = px.bar(
+                ag_cond, x='condicion', y='ventas', color='condicion',
+                template="plotly_dark", 
+                labels={'condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
+                text_auto='.3s'
+            )
+            fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
+            fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_cond, use_container_width=True)
 
         st.markdown("---")
 
@@ -1214,6 +1276,24 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             else:
                 btn_scx = generar_excel_corporativo(top_20, "xlsx")
                 st.download_button("Descargar Excel de Score", btn_scx, "Ranking_Score.xlsx")
+                
+        st.markdown("---")
+        st.subheader("🌲 Radiografía Sectorial (ADN del Cliente)")
+        st.info("Explorá interactivamente de qué matriz productiva se alimenta la empresa haciendo click en cada Anillo.")
+        if 'rubro' in dff.columns and 'subrubro' in dff.columns:
+            ag_rubro = dff.groupby(['rubro', 'subrubro']).agg(volumen=("volumen", "sum")).reset_index()
+            # Limpiamos los S/D masivos si nublan el gráfico
+            ag_rubro = ag_rubro[ag_rubro['rubro'] != "S/D"]
+            if not ag_rubro.empty:
+                fig_sun = px.sunburst(
+                    ag_rubro, path=['rubro', 'subrubro'], values='volumen',
+                    color='volumen', color_continuous_scale='Blues',
+                    template="plotly_dark"
+                )
+                fig_sun.update_layout(margin=dict(t=20, l=0, r=0, b=0), height=550, paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color':'white'})
+                st.plotly_chart(fig_sun, use_container_width=True)
+            else:
+                st.warning("No hay suficientes datos sectoriales ('Rubro') etiquetados en este Excel para trazar la Radiografía.")
     else:
         st.warning("⚠️ Sin datos para procesar en el Copiloto Estratégico.")
 
