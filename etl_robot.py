@@ -87,21 +87,33 @@ def procesar_archivos():
             
             # Estandarización de columnas
             df.columns = df.columns.astype(str).str.strip().str.lower()
-            df = df.rename(columns={'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
+            df = df.rename(columns={
+                'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total',
+                'nnumero': 'numero', 'cantidad': 'volumen', 'ult_provee': 'proveedor', 'cod_bande': 'bandera'
+            })
             df = df.loc[:, ~df.columns.duplicated()]
 
             # Columnas Requeridas de Textos
-            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
-                if c not in df.columns: df[c] = "S/D"
+            text_cols = [
+                'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'codigocom', 
+                'nombre', 'localidad', 'provincia', 'canal', 'categoria', 'canal_com', 'cod_activ', 'cod_canal', 
+                'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 'tipo_comb', 'subti_comb', 
+                'domicilio', 'c_postal', 'proveedor', 'bandera'
+            ]
+            for c in text_cols:
+                if c not in df.columns: 
+                    df[c] = "S/D"
+                else:
+                    df[c] = df[c].fillna("S/D").astype(str)
 
             # Normalización Estricta
-            for c in ['formulario', 'nnumero', 'codigo', 'nombre']:
+            for c in ['formulario', 'numero', 'codigo', 'nombre']:
                 if c in df.columns: df[c] = df[c].apply(normalize_id_col)
 
             # Matemáticas Financieras Seguras
-            df["cantidad"] = pd.to_numeric(df.get("cantidad", 0), errors='coerce').fillna(0)
+            df["volumen"] = pd.to_numeric(df.get("volumen", 0), errors='coerce').fillna(0)
             df["precio"] = pd.to_numeric(df.get("precio", 0), errors='coerce').fillna(0)
-            df["venta_total"] = pd.to_numeric(df.get("venta_total", df["precio"] * df["cantidad"]), errors='coerce').fillna(df["precio"] * df["cantidad"])
+            df["venta_total"] = pd.to_numeric(df.get("venta_total", df["precio"] * df["volumen"]), errors='coerce').fillna(df["precio"] * df["volumen"])
 
                         # Manejo de Fechas Indestructible para el Robot
             if 'fecha' in df.columns:
@@ -127,7 +139,7 @@ def procesar_archivos():
 
 
             # HASHING ID ÚNICO (Regla de Oro JL)
-            df['debug_str'] = df.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+            df['debug_str'] = df.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('numero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
             df['id_unique'] = df['debug_str'].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
             
             df_totales.append(df)
@@ -144,7 +156,13 @@ def procesar_archivos():
     df_master = df_master.drop_duplicates(subset=['id_unique'], keep='last')
     
     # Preparamos el Payload para la base de datos (Solo las columnas que existen en Supabase)
-    cols_validas = ['id_unique', 'fecha_dt', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'precio', 'venta_total', 'nombre', 'formulario', 'nnumero', 'codigo', 'ult_provee']
+    cols_validas = [
+        'id_unique', 'fecha_dt', 'anio', 'mes', 'precio', 'volumen', 'venta_total',
+        'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'codigocom', 
+        'nombre', 'localidad', 'provincia', 'canal', 'categoria', 'canal_com', 'cod_activ', 'cod_canal', 
+        'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 'tipo_comb', 'subti_comb', 
+        'domicilio', 'c_postal', 'proveedor', 'bandera'
+    ]
     
     df_upload = df_master[[c for c in cols_validas if c in df_master.columns]].copy()
     

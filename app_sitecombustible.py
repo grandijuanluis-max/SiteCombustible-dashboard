@@ -328,14 +328,14 @@ def load_data():
             df['mes'] = df['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
             
             # Asegurar conversiones numéricas
-            for col in ["cantidad", "precio", "venta_total"]:
+            for col in ["volumen", "precio", "venta_total"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
                 else:
                     df[col] = 0.0
             
             # Prevenir colapsos si no vienen las columnas
-            for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'id_unique']:
+            for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'id_unique', 'bandera']:
                 if c not in df.columns: df[c] = "S/D"
                 else: df[c] = df[c].fillna("S/D")
                 
@@ -344,13 +344,23 @@ def load_data():
                 df = df.drop_duplicates(subset=['id_unique'])
         else:
             # Asegurar todas las columnas requeridas para evitar KeyErrors
-            df = pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
+            df = pd.DataFrame(columns=[
+                'id_unique', 'anio', 'mes', 'precio', 'volumen', 'venta_total', 'numero', 'codigo', 'detalle', 'formulario', 
+                'fecha', 'cliente', 'condicion', 'codigocom', 'nombre', 'localidad', 'provincia', 'canal', 'categoria', 
+                'canal_com', 'cod_activ', 'cod_canal', 'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 
+                'tipo_comb', 'subti_comb', 'domicilio', 'c_postal', 'proveedor', 'bandera'
+            ])
         return df
     except Exception as e: 
         import traceback
         st.error(f"Error mortal leyendo la base de Supabase: {e}")
         st.error(traceback.format_exc())
-        return pd.DataFrame(columns=['id_unique', 'anio', 'mes', 'localidad', 'provincia', 'subti_comb', 'cantidad', 'venta_total', 'nombre', 'fecha_dt', 'formulario', 'nnumero', 'codigo', 'ult_provee', 'precio'])
+        return pd.DataFrame(columns=[
+                'id_unique', 'anio', 'mes', 'precio', 'volumen', 'venta_total', 'numero', 'codigo', 'detalle', 'formulario', 
+                'fecha', 'cliente', 'condicion', 'codigocom', 'nombre', 'localidad', 'provincia', 'canal', 'categoria', 
+                'canal_com', 'cod_activ', 'cod_canal', 'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 
+                'tipo_comb', 'subti_comb', 'domicilio', 'c_postal', 'proveedor', 'bandera'
+            ])
 
 def save_to_google_sheets(df_to_save, mode='full'):
     try:
@@ -522,7 +532,7 @@ if sel_prov: dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin
 if sel_loc:  dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
 if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
 
-vol_tot_global = dff['cantidad'].sum() if not dff.empty else 0
+vol_tot_global = dff['volumen'].sum() if not dff.empty else 0
 cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
 
 # ==========================================
@@ -604,7 +614,7 @@ if app_page == "🚀 INGESTA & CARGA":
                 client = get_gsheet_client()
                 sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
                 sheet.clear()
-                cols = ['marca_temporal', 'id_unique', 'ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb', 'cantidad', 'precio', 'venta_total', 'fecha', 'fecha_dt', 'anio', 'mes']
+                cols = ['marca_temporal', 'id_unique', 'proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'volumen', 'precio', 'venta_total', 'fecha', 'fecha_dt', 'anio', 'mes', 'bandera']
                 sheet.append_row(cols)
                 st.cache_data.clear()
                 st.session_state.df_master = load_data()
@@ -626,23 +636,25 @@ if app_page == "🚀 INGESTA & CARGA":
         else: df_new = pd.read_csv(up_file, encoding='latin-1', sep=None, engine='python', on_bad_lines='skip')
         
         df_new.columns = df_new.columns.astype(str).str.strip().str.lower()
-        # Se renombra venta_total sin afectar los identificadores originales del excel superior (nombre, subti_comb, etc.)
-        df_new = df_new.rename(columns={'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total'})
+        df_new = df_new.rename(columns={
+            'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total',
+            'nnumero': 'numero', 'cantidad': 'volumen', 'ult_provee': 'proveedor', 'cod_bande': 'bandera'
+        })
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
         # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
-        for c in ['ult_provee', 'localidad', 'provincia', 'formulario', 'nnumero', 'codigo', 'nombre', 'subti_comb']:
+        for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera']:
             if c not in df_new.columns: df_new[c] = "S/D"
 
         # Normalización Extremadamente Estricta pre-hashing para eliminar .0 rebeldes de Pandas
-        for c in ['formulario', 'nnumero', 'codigo', 'nombre']:
+        for c in ['formulario', 'numero', 'codigo', 'nombre']:
             if c in df_new.columns: df_new[c] = df_new[c].apply(normalize_id_col)
 
         # Aseguramos columnas numéricas sin S/D de manera segura evitando Null Pointers
-        if "cantidad" in df_new.columns:
-            df_new["cantidad"] = pd.to_numeric(df_new["cantidad"], errors='coerce').fillna(0)
+        if "volumen" in df_new.columns:
+            df_new["volumen"] = pd.to_numeric(df_new["volumen"], errors='coerce').fillna(0)
         else:
-            df_new["cantidad"] = 0.0
+            df_new["volumen"] = 0.0
             
         if "precio" in df_new.columns:
             df_new["precio"] = pd.to_numeric(df_new["precio"], errors='coerce').fillna(0)
@@ -650,9 +662,9 @@ if app_page == "🚀 INGESTA & CARGA":
             df_new["precio"] = 0.0
             
         if "venta_total" in df_new.columns:
-            df_new["venta_total"] = pd.to_numeric(df_new["venta_total"], errors='coerce').fillna(df_new["precio"] * df_new["cantidad"])
+            df_new["venta_total"] = pd.to_numeric(df_new["venta_total"], errors='coerce').fillna(df_new["precio"] * df_new["volumen"])
         else:
-            df_new["venta_total"] = df_new["precio"] * df_new["cantidad"]
+            df_new["venta_total"] = df_new["precio"] * df_new["volumen"]
         
         if 'fecha' in df_new.columns:
             df_new['fecha_dt'] = robust_date_parse(df_new['fecha'])
@@ -671,24 +683,24 @@ if app_page == "🚀 INGESTA & CARGA":
             df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
         
         # Identificador Único Estricto (Regla de Negocio JL: Fecha + Cliente + Producto + Formulario + NNumero)
-        df_new['debug_str'] = df_new.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+        df_new['debug_str'] = df_new.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('numero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
         df_new['id_unique'] = df_new['debug_str'].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
         
         # UI DIAGNOSTICO EN VIVO PARA EL USUARIO Y COMPROBACION DE GOOGLE SHEETS
         master_ids = set(df_master['id_unique']) if not df_master.empty and 'id_unique' in df_master.columns else set()
         df_new['ACCION_FUTURA'] = df_new['id_unique'].apply(lambda x: "🟢 SE ACTUALIZARÁ (Ya existe en Google Sheet)" if x in master_ids else "🟡 SE INSERTARÁ (Fila TOTALMENTE NUEVA)")
         
-        bug_rows = df_new[df_new['nnumero'].astype(str).str.contains('1000019524', na=False)]
+        bug_rows = df_new[df_new['numero'].astype(str).str.contains('1000019524', na=False)]
         if not bug_rows.empty:
             with st.expander("🚨 ESCÁNER FORENSE DEFINITIVO: Análisis del NNumero 1000019524", expanded=True):
                 st.error("JL: Tienes razón. La caja verde me confunde. Si te dice 'INSERTARÁ', es porque cree que no existe. Busquemos en vivo a esta bestia directamente adentro del Google Sheets que tengo en Memoria Ram:")
                 
-                master_bug = df_master[df_master['nnumero'].astype(str).str.contains('1000019524', na=False)].copy()
+                master_bug = df_master[df_master['numero'].astype(str).str.contains('1000019524', na=False)].copy()
                 if not master_bug.empty:
-                    master_bug['debug_str'] = master_bug.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('nnumero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+                    master_bug['debug_str'] = master_bug.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('numero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
                 
                 c1, c2 = st.columns(2)
-                cols_to_show = ['id_unique', 'debug_str', 'codigo', 'cantidad']
+                cols_to_show = ['id_unique', 'debug_str', 'codigo', 'volumen']
                 
                 with c1:
                     st.warning("📥 CÓMO SE LEE EN EL EXCEL NUEVO:")
@@ -724,7 +736,7 @@ if app_page == "🚀 INGESTA & CARGA":
                 with st.expander(f"⚙️ Auditoría de Colisiones ({actualizados} Repetidas en tu Archivo)"):
                     st.warning("El motor matemático agrupó estas filas. Compara de a pares: verás que comparten EXACTAMENTE Fecha, Formulario, NNumero, Código y Nombre de Cliente. Como la regla de negocio es estricta, se conservó sólo una.")
                     dups = df_new[df_new.duplicated(subset=['id_unique'], keep=False)].sort_values('id_unique')
-                    cols_dup = [c for c in ['fecha_dt', 'formulario', 'nnumero', 'codigo', 'nombre', 'cantidad'] if c in dups.columns]
+                    cols_dup = [c for c in ['fecha_dt', 'formulario', 'numero', 'codigo', 'nombre', 'volumen'] if c in dups.columns]
                     df_dups = dups[cols_dup].head(100).copy()
                     if 'fecha_dt' in df_dups.columns: df_dups['fecha_dt'] = df_dups['fecha_dt'].dt.strftime('%d/%m/%Y')
                     st.dataframe(df_dups.astype(str))
@@ -748,7 +760,7 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
         k3.metric("Ventas Est. ($)", f"$ {dff['venta_total'].sum():,.0f}")
         
         st.subheader("📍 Concentración Geográfica (Mapa de Sensibilidad)")
-        ag_map = dff.groupby(["localidad", "provincia"]).agg(vol=("cantidad", "sum"), cli=("nombre", "nunique")).reset_index()
+        ag_map = dff.groupby(["localidad", "provincia"]).agg(vol=("volumen", "sum"), cli=("nombre", "nunique")).reset_index()
         def calc_score(r):
             s = ((r['vol'] / vol_tot_global) * 70) + ((r['cli'] / cli_tot_global) * 30)
             n = "Alta" if s >= 5.0 else "Media" if s >= 1.5 else "Baja"
@@ -912,7 +924,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg + Espinazo Cero) ---
         st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
         e_vol_total_raw = df_t.groupby(['sort_key', 'eje_temporal']).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum"),
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
 
@@ -954,7 +966,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg + Producto Cartesiano) ---
         st.markdown(f"#### 2. Empuje por Producto (Tendencia por {v_mode})")
         e_sub_raw = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
 
         if not df_spine.empty and not e_sub_raw.empty:
@@ -994,7 +1006,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         # --- RANKING PROVINCIAL ---
         st.markdown("#### 3. Dominancia por Zona (Ranking Volumen)")
         r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
         
         fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
@@ -1024,8 +1036,8 @@ if app_page == "🍩 PODER DE MERCADO":
         st.subheader("🏭 Poder de Negociación por Proveedor")
         
         # 1. Preparación de datos con lógica NamedAgg (Certificada por API)
-        prov_mix = dff.groupby(['ult_provee', 'subti_comb']).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum"),
+        prov_mix = dff.groupby(['proveedor', 'subti_comb']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
 
@@ -1037,12 +1049,12 @@ if app_page == "🍩 PODER DE MERCADO":
         # El mayor volumen siempre arriba para lectura rápida
         fig_prov_2 = px.bar(
             prov_mix, 
-            y='ult_provee', 
+            y='proveedor', 
             x='volumen', 
             color='subti_comb', 
             orientation='h', 
             template="plotly_dark",
-            labels={'ult_provee': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
+            labels={'proveedor': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
         )
         # Ordenamos: Mayor volumen ARRIBA de todo
         fig_prov_2.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
@@ -1073,7 +1085,7 @@ if app_page == "🍩 PODER DE MERCADO":
         
         # Agrupamos solo por subtipo para el gráfico de torta
         mix_global = dff.groupby('subti_comb').agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
 
         fig_pie = px.pie(
@@ -1111,7 +1123,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         # 1. Análisis de Aceleración Comercial (MoM)
         # Usamos NamedAgg para garantizar que la sumatoria sea la correcta
         mom_data = dff.groupby(['anio', 'mes']).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum")
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
 
         if len(mom_data) >= 2:
@@ -1141,7 +1153,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         
         # --- AQUÍ ESTABA EL ERROR (CORREGIDO CON aggfunc=) ---
         ag_riesgo = dff.groupby(["localidad", "provincia"]).agg(
-            volumen=pd.NamedAgg(column="cantidad", aggfunc="sum"),
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             clientes=pd.NamedAgg(column="nombre", aggfunc="nunique") # <-- CORREGIDO
         ).reset_index()
         
@@ -1170,7 +1182,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
 
         # 3. Ranking Estratégico de Score (Top 20)
         st.subheader("🧠 Ranking de Relevancia Estratégica ($Score$)")
-        v_gl = dff['cantidad'].sum() if not dff.empty else 1
+        v_gl = dff['volumen'].sum() if not dff.empty else 1
         c_gl = dff['nombre'].nunique() if not dff.empty else 1
         
         # Cálculo de Score dinámico
