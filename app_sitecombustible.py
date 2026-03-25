@@ -1245,12 +1245,15 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         st.markdown("---")
         st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
         if 'condicion' in dff.columns:
+            # Primero ordenamos por Capital Comprometido (ventas) para extraer el Top 10 real
             ag_cond = dff.groupby(['condicion']).agg(
                 volumen=("volumen", "sum"),
                 ventas=("venta_total", "sum")
-            ).reset_index().sort_values('volumen', ascending=False)
+            ).reset_index().sort_values('ventas', ascending=False)
             
-            # Limitar a Top 10 natural, con toggle para liberarlo
+            # CSS para forzar el título del toggle a color BLANCO
+            st.markdown('<style>div[data-testid="stToggle"] p {color: white !important; font-weight: 500;}</style>', unsafe_allow_html=True)
+            
             mostrar_todas = st.toggle("Mostrar Top 10 -> Cargar Todas las Condiciones", value=False)
             if not mostrar_todas:
                 ag_cond = ag_cond.head(10)
@@ -1262,6 +1265,8 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                 text_auto='.3s'
             )
             fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
+            # Ordenamos la gráfica de izquierda a derecha (ascendente)
+            fig_cond.update_xaxes(categoryorder='total ascending', tickfont=dict(color='white'))
             fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
             st.plotly_chart(fig_cond, use_container_width=True)
 
