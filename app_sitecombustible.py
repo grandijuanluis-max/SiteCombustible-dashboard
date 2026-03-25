@@ -1221,13 +1221,15 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         if not riesgo_critico.empty:
             st.error(f"Se detectaron {len(riesgo_critico)} zonas con Riesgo de Fuga por alta concentración.")
             
-            # Limpiamos, ordenamos y traducimos los títulos para forzar mejor contraste
+            # Limpiamos, ordenamos y traducimos los títulos
             show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
             show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
             
-            # Aplicamos Pandas Styler SOLO al encabezado forzando con !important (Azul brillante y texto Blanco)
-            sty_df = show_df.style.set_table_styles([{'selector': 'th', 'props': [('color', 'white !important'), ('background-color', '#2563eb !important'), ('font-weight', 'bold !important')]}])
-            st.dataframe(sty_df, use_container_width=True)
+            # Formateamos los números para que no muestre 3826.000000
+            show_df['VOLUMEN (LTS)'] = show_df['VOLUMEN (LTS)'].apply(lambda x: f"{x:,.0f}")
+            
+            # Usamos st.table() que renderiza en HTML nativo y garantiza que los textos blancos sean 100% legibles
+            st.table(show_df)
             
             # Exportación Sutil de Alertas
             with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
