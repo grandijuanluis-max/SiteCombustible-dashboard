@@ -1135,20 +1135,32 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
     if not dff.empty:
         st.subheader("🧠 Inteligencia de Negocio & Análisis de Riesgo")
         
-        # 1. Análisis de Aceleración Comercial (MoM)
-        # Usamos NamedAgg para garantizar que la sumatoria sea la correcta
-        mom_data = dff.groupby(['anio', 'mes']).agg(
-            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
-        ).reset_index()
-
-        if len(mom_data) >= 2:
-            # Obtenemos los últimos dos periodos cargados
-            v_actual = mom_data.iloc[-1]['volumen']
-            v_anterior = mom_data.iloc[-2]['volumen']
-            periodo_act = f"{mom_data.iloc[-1]['mes']} {mom_data.iloc[-1]['anio']}"
+        # 1. Análisis Dinámico del Velocímetro Comercial (vs Período Anterior equivalente)
+        v_actual = dff['volumen'].sum() if not dff.empty else 0
+        df_master_ref = st.session_state.df_master
+        
+        if fecha_inicio and fecha_fin:
+            # Período definido por el usuario (ej. 7 días, 1 mes, etc.)
+            dias_delta = (pd.to_datetime(fecha_fin) - pd.to_datetime(fecha_inicio)).days + 1
+            f_ant_inicio = pd.to_datetime(fecha_inicio) - pd.Timedelta(days=dias_delta)
+            f_ant_fin = pd.to_datetime(fecha_inicio) - pd.Timedelta(days=1)
             
-            variacion = ((v_actual - v_anterior) / v_anterior) * 100 if v_anterior > 0 else 0
+            df_ant = df_master_ref[(df_master_ref['fecha_dt'] >= f_ant_inicio) & (df_master_ref['fecha_dt'] <= f_ant_fin)]
+            v_anterior = df_ant['volumen'].sum() if not df_ant.empty else 0
             
+            periodo_act = f"{dias_delta} Días"
+            txt_ref = f"{dias_delta} Días Previos"
+        else:
+            # Todo Histórico -> Comparamos el año actual en curso vs el año pasado completo
+            anio_actual = date.today().year
+            v_actual = dff[dff['anio'] == anio_actual]['volumen'].sum()
+            v_anterior = dff[dff['anio'] == anio_actual - 1]['volumen'].sum()
+            periodo_act = f"Año en curso"
+            txt_ref = f"Año Anterior ({anio_actual - 1})"
+            
+        variacion = ((v_actual - v_anterior) / v_anterior) * 100 if v_anterior > 0 else 0
+        
+        if v_actual > 0 or v_anterior > 0:
             # ======= EL "VELOCÍMETRO" (GAUGE CHART) =======
             st.markdown("#### 🏎️ Tacómetro de Velocidad Comercial")
             c_gauge, c_txt = st.columns([1.5, 1])
@@ -1183,13 +1195,13 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                 st.plotly_chart(fig_gauge, use_container_width=True)
 
             with c_txt:
-                st.info(f"**Interpretación Gerencial:** El despacho presenta una variación del **{variacion:.2f}%** respecto al mes anterior.")
+                st.info(f"**Interpretación Gerencial:** Mide tu rendimiento en bloque. Hoy estás **{abs(variacion):.2f}%** {'arriba' if variacion >=0 else 'abajo'} respecto a idéntico período previo ({txt_ref}).")
                 if variacion > 5:
-                    st.success("🚀 **Motor a tope:** El camión está ganando tracción fuerte. ¡Momento de acelerar adquisiciones!")
+                    st.success("🚀 **Motor a tope:** El sector está ganando inercia con fuerza. ¡Asegurar stock suficiente!")
                 elif variacion >= -5:
-                    st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de ventas estable. Sin grandes riesgos a la vista.")
+                    st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de distribución estable.")
                 else:
-                    st.error("📉 **Desaceleración (Alerta):** El volumen está cayendo. Sugerencia: Revisar táctica agresiva en la Matriz de Dominancia Zonal o inyectar Cuenta Corriente.")
+                    st.error("📉 **Alerta Desaceleración:** Caída prolongada de litros en las Mangueras. Sugerencia de inyectar crédito o promociones.")
 
         st.markdown("---")
 
@@ -1208,7 +1220,14 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         
         if not riesgo_critico.empty:
             st.error(f"Se detectaron {len(riesgo_critico)} zonas con Riesgo de Fuga por alta concentración.")
-            st.dataframe(riesgo_critico.sort_values("volumen", ascending=False), use_container_width=True)
+            
+            # Limpiamos, ordenamos y traducimos los títulos para forzar mejor contraste
+            show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
+            show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
+            
+            # Aplicamos Pandas Styler para forzar títulos blancos sobre fondos oscuros en Streamlit
+            sty_df = show_df.style.set_properties(**{'background-color': '#0f172a', 'color': 'white'}).set_table_styles([{'selector': 'th', 'props': [('color', 'white'), ('background-color', '#1e293b'), ('font-weight', 'bold')]}])
+            st.dataframe(sty_df, use_container_width=True)
             
             # Exportación Sutil de Alertas
             with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
@@ -1229,7 +1248,13 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             ag_cond = dff.groupby(['condicion']).agg(
                 volumen=("volumen", "sum"),
                 ventas=("venta_total", "sum")
-            ).reset_index()
+            ).reset_index().sort_values('volumen', ascending=False)
+            
+            # Limitar a Top 10 natural, con toggle para liberarlo
+            mostrar_todas = st.toggle("Mostrar Top 10 -> Cargar Todas las Condiciones", value=False)
+            if not mostrar_todas:
+                ag_cond = ag_cond.head(10)
+                
             fig_cond = px.bar(
                 ag_cond, x='condicion', y='ventas', color='condicion',
                 template="plotly_dark", 
@@ -1237,7 +1262,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                 text_auto='.3s'
             )
             fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
-            fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)')
+            fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
             st.plotly_chart(fig_cond, use_container_width=True)
 
         st.markdown("---")
@@ -1279,7 +1304,7 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                 
         st.markdown("---")
         st.subheader("🌲 Radiografía Sectorial (ADN del Cliente)")
-        st.info("Explorá interactivamente de qué matriz productiva se alimenta la empresa haciendo click en cada Anillo.")
+        st.info("🧬 **Análisis de Impacto Productivo:** Este modelo circular mapea de qué industrias exactas depende tu facturación. El círculo central verde oscuro agrupa las áreas macro (ej. AGRO, TRANSPORTE), y al hacer click en él se despliegan los anillos exteriores que contienen los sub-rubros específicos. Te permite identificar instantáneamente el ADN comercial de tu negocio y dónde está apoyado el mayor volumen.")
         if 'rubro' in dff.columns and 'subrubro' in dff.columns:
             ag_rubro = dff.groupby(['rubro', 'subrubro']).agg(volumen=("volumen", "sum")).reset_index()
             # Limpiamos los S/D masivos si nublan el gráfico
