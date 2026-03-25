@@ -1228,8 +1228,17 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             # Formateamos los números para que no muestre 3826.000000
             show_df['VOLUMEN (LTS)'] = show_df['VOLUMEN (LTS)'].apply(lambda x: f"{x:,.0f}")
             
-            # Usamos st.table() que renderiza en HTML nativo y garantiza que los textos blancos sean 100% legibles
-            st.table(show_df)
+            # Estilos exactos: Fondo blanco y texto negro para las celdas (la grilla). Fondo azul y texto blanco para los títulos.
+            sty_df = show_df.style.set_properties(**{
+                'background-color': 'white', 
+                'color': 'black'
+            }).set_table_styles([{
+                'selector': 'th', 
+                'props': [('background-color', '#2563eb !important'), ('color', 'white !important')]
+            }])
+            
+            # Usamos st.dataframe para que vuelva a ser scrollable (la grilla interactiva)
+            st.dataframe(sty_df, use_container_width=True)
             
             # Exportación Sutil de Alertas
             with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
