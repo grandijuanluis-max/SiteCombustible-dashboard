@@ -1225,8 +1225,8 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
             show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
             show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
             
-            # Aplicamos Pandas Styler para forzar títulos blancos sobre fondos oscuros en Streamlit
-            sty_df = show_df.style.set_properties(**{'background-color': '#0f172a', 'color': 'white'}).set_table_styles([{'selector': 'th', 'props': [('color', 'white'), ('background-color', '#1e293b'), ('font-weight', 'bold')]}])
+            # Aplicamos Pandas Styler SOLO al encabezado forzando con !important (Azul brillante y texto Blanco)
+            sty_df = show_df.style.set_table_styles([{'selector': 'th', 'props': [('color', 'white !important'), ('background-color', '#2563eb !important'), ('font-weight', 'bold !important')]}])
             st.dataframe(sty_df, use_container_width=True)
             
             # Exportación Sutil de Alertas
