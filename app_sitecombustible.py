@@ -1398,15 +1398,24 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
         lista_usuarios = []
         supabase = None
         
-    # Mejorar la legibilidad superponiendo un fondo semi-sólido a los formularios
+    # Mejorar la legibilidad superponiendo un fondo semi-sólido a los formularios y forzando texto blanco
     st.markdown("""
         <style>
-        div[data-testid="stForm"] {
-            background-color: rgba(15, 23, 42, 0.85); /* Azul muy oscuro y casi opaco */
+        /* Fondo oscuro para que resalten los formularios y selectores */
+        div[data-testid="stForm"], div[data-testid="stTabs"] {
+            background-color: rgba(15, 23, 42, 0.75) !important; 
             border-radius: 12px;
             padding: 2% 5%;
-            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.5);
+            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Forzar color blanco puro y sombra oscura en TODOS los textos y etiquetas */
+        /* Esto soluciona la transparencia del texto contra la imagen de la refinería */
+        .st-emotion-cache-1629p8f h1, .st-emotion-cache-1629p8f h2, .st-emotion-cache-1629p8f h3, .st-emotion-cache-1629p8f h4, 
+        .st-emotion-cache-1629p8f p, .st-emotion-cache-1629p8f span, label, .stCheckbox label span {
+            color: #ffffff !important;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+            font-weight: 500 !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -1591,16 +1600,16 @@ if app_page == "⚙️ CONFIGURACIÓN":
             
             if nv_modo == "FTP":
                 st.markdown("#### 🌐 Parámetros FTP Corporativo")
-                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=nv_fh)
-                nv_fu = st.text_input("Usuario (Login ID)", value=nv_fu)
-                nv_fp = st.text_input("Secure Password", value=nv_fp, type="password")
-                nv_fo = st.text_input("Carpeta Lectura Crudos", value=nv_fo)
-                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=nv_fd)
+                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=nv_fh, help="Ejemplo: 192.168.3.249 o ftp.miempresa.com. Representa la IP o dominio del servidor donde el Robot debe ir a buscar los archivos.")
+                nv_fu = st.text_input("Usuario (Login ID)", value=nv_fu, help="El nombre de usuario brindado por el equipo de IT para autenticarse (Ej: admin_combustibles).")
+                nv_fp = st.text_input("Secure Password", value=nv_fp, type="password", help="La contraseña de acceso. Al guardarla, seencriptará automáticamente en Supabase.")
+                nv_fo = st.text_input("Carpeta Lectura Crudos", value=nv_fo, help="Ruta exacta a la carpeta del FTP donde se depositarán los excels nuevos. Debe empezar y terminar con barra. Ejemplo: /pendientes/ o /Archivos_Nuevos/")
+                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=nv_fd, help="Ruta a donde el Robot moverá los excels una vez absorbidos, para no volver a inyectarlos al día siguiente. Ejemplo: /procesados/")
                 
             elif nv_modo == "DRIVE":
                 st.markdown("#### ☁️ Parámetros Google Drive")
-                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=nv_do)
-                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=nv_dd)
+                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=nv_do, help="Ejemplo: 1_SH38TdW1AUSZ14pkc... Es el código secreto alfanumérico largo que podés ver en la URL (arriba en el navegador) cuando entrás a tu carpeta de Google Drive.")
+                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=nv_dd, help="El ID (código de URL) de la carpeta donde el robot archivará los excels históricos luego de procesarlos.")
                 
             elif nv_modo == "LOCAL":
                 st.markdown("#### 💻 Modo de Operación Local (Manual / Emergencia)")
