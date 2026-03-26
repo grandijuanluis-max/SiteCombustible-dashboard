@@ -1398,6 +1398,19 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
         lista_usuarios = []
         supabase = None
         
+    # Mejorar la legibilidad superponiendo un fondo semi-sólido a los formularios
+    st.markdown("""
+        <style>
+        div[data-testid="stForm"] {
+            background-color: rgba(15, 23, 42, 0.85); /* Azul muy oscuro y casi opaco */
+            border-radius: 12px;
+            padding: 2% 5%;
+            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     t_crear, t_modificar, t_bloquear = st.tabs(["✨ Crear Credencial", "✏️ Modificar Accesos", "⛔ Bloquear / Baja"])
     
     with t_crear:
@@ -1408,13 +1421,13 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
             n_pass = st.text_input("Contraseña Temporal", type="password")
             
             st.markdown("### 🔑 Permisos Asignados al Usuario")
-            p_ing = st.checkbox("🚀 INGESTA & CARGA (Permitir subir archivos)")
-            p_vis = st.checkbox("🏠 VISIÓN EJECUTIVA (Acceso al HUB Principal)")
-            p_ine = st.checkbox("📈 INERCIA TEMPORAL (Acceso al Histórico)")
-            p_mer = st.checkbox("🍩 PODER DE MERCADO (Mapas y Market Share)")
-            p_cop = st.checkbox("🧠 COPILOTO (Motor Neuronal y Predicciones)")
-            p_adm = st.checkbox("👑 MODO DIOS (Puede crear/borrar otros usuarios)")
-            p_cfg = st.checkbox("⚙️ CONFIGURACIÓN (Control Motor ETL y Logo)")
+            p_ing = st.checkbox("🚀 INGESTA & CARGA")
+            p_vis = st.checkbox("🏠 VISIÓN EJECUTIVA")
+            p_ine = st.checkbox("📈 INERCIA TEMPORAL")
+            p_mer = st.checkbox("🍩 PODER DE MERCADO")
+            p_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO")
+            p_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)")
+            p_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA")
             
             btn_crear = st.form_submit_button("Crear Nueva Credencial", type="primary", use_container_width=True)
             
@@ -1462,9 +1475,9 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                     e_vis = st.checkbox("🏠 VISIÓN EJECUTIVA", value=(str(user_data.get('vision', '')).lower() == 'si'))
                     e_ine = st.checkbox("📈 INERCIA TEMPORAL", value=(str(user_data.get('inercia', '')).lower() == 'si'))
                     e_mer = st.checkbox("🍩 PODER DE MERCADO", value=(str(user_data.get('mercado', '')).lower() == 'si'))
-                    e_cop = st.checkbox("🧠 COPILOTO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
-                    e_adm = st.checkbox("👑 MODO DIOS", value=(str(user_data.get('admin', '')).lower() == 'si'))
-                    e_cfg = st.checkbox("⚙️ CONFIGURACIÓN", value=(str(user_data.get('can_config', '')).lower() == 'si'))
+                    e_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
+                    e_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)", value=(str(user_data.get('admin', '')).lower() == 'si'))
+                    e_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA", value=(str(user_data.get('can_config', '')).lower() == 'si'))
                     
                     btn_edit = st.form_submit_button("Actualizar Accesos en Vivo", type="primary", use_container_width=True)
                     if btn_edit and supabase:
@@ -1556,33 +1569,49 @@ if app_page == "⚙️ CONFIGURACIÓN":
                     st.error(f"Error escribiendo en Bóveda: {e}")
                     
     with t2:
+        st.subheader("Orquesta del Inyector de Datos (Nocturno)")
+        import time
+        metodos = ["FTP", "DRIVE", "LOCAL"]
+        idx_modo = metodos.index(SYS_CONF.get("etl_modo", "FTP").upper()) if SYS_CONF.get("etl_modo", "FTP").upper() in metodos else 0
+        
+        # El selector debe estar AFUERA del form para que reaccione al instante (Streamlit reactivo)
+        nv_modo = st.selectbox("Método de Extracción Satelital (ETL Automático)", metodos, index=idx_modo)
+        
         with st.form("form_etl"):
-            st.subheader("Orquesta del Inyector de Datos (Nocturno)")
-            import time
-            metodos = ["FTP", "DRIVE", "LOCAL"]
-            idx_modo = metodos.index(SYS_CONF.get("etl_modo", "FTP").upper()) if SYS_CONF.get("etl_modo", "FTP").upper() in metodos else 0
-            nv_modo = st.selectbox("Método de Extracción Satelital (ETL Automático)", metodos, index=idx_modo)
-            
             st.divider()
-            colA, colB = st.columns(2)
-            with colA:
+            
+            # Variables preservadas por seguridad si no se renderizan
+            nv_fh = SYS_CONF.get("ftp_host", "")
+            nv_fu = SYS_CONF.get("ftp_user", "")
+            nv_fp = SYS_CONF.get("ftp_pass", "")
+            nv_fo = SYS_CONF.get("ftp_origen", "/pendientes/")
+            nv_fd = SYS_CONF.get("ftp_destino", "/procesados/")
+            nv_do = SYS_CONF.get("drive_origen", "")
+            nv_dd = SYS_CONF.get("drive_destino", "")
+            
+            if nv_modo == "FTP":
                 st.markdown("#### 🌐 Parámetros FTP Corporativo")
-                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=SYS_CONF.get("ftp_host", ""))
-                nv_fu = st.text_input("Usuario (Login ID)", value=SYS_CONF.get("ftp_user", ""))
-                nv_fp = st.text_input("Secure Password", value=SYS_CONF.get("ftp_pass", ""), type="password")
-                nv_fo = st.text_input("Carpeta Lectura Crudos", value=SYS_CONF.get("ftp_origen", "/pendientes/"))
-                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=SYS_CONF.get("ftp_destino", "/procesados/"))
-            with colB:
+                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=nv_fh)
+                nv_fu = st.text_input("Usuario (Login ID)", value=nv_fu)
+                nv_fp = st.text_input("Secure Password", value=nv_fp, type="password")
+                nv_fo = st.text_input("Carpeta Lectura Crudos", value=nv_fo)
+                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=nv_fd)
+                
+            elif nv_modo == "DRIVE":
                 st.markdown("#### ☁️ Parámetros Google Drive")
-                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=SYS_CONF.get("drive_origen", ""))
-                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=SYS_CONF.get("drive_destino", ""))
+                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=nv_do)
+                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=nv_dd)
+                
+            elif nv_modo == "LOCAL":
+                st.markdown("#### 💻 Modo de Operación Local (Manual / Emergencia)")
+                st.info("🔌 El robot NO se conectará a internet (Se ignoran FTP y Drive). \n\nBuscará y absorberá únicamente los Excels que se depositen físicamente en la carpeta interna `/temp_pendientes/` del disco duro del servidor.")
                 
             sub_etl = st.form_submit_button("🔥 Enviar Instrucciones al Robot ETL", type="primary", use_container_width=True)
             if sub_etl:
                 try:
                     url = st.secrets.get("SUPABASE_URL")
                     key = st.secrets.get("SUPABASE_KEY")
-                    sc: Client = create_client(url, key)
+                    sc = create_client(url, key)
                     sc.table("configuracion").update({
                         "etl_modo": nv_modo,
                         "ftp_host": nv_fh, "ftp_user": nv_fu, "ftp_pass": nv_fp, 
@@ -1590,7 +1619,7 @@ if app_page == "⚙️ CONFIGURACIÓN":
                         "drive_origen": nv_do, "drive_destino": nv_dd
                     }).eq("id", 1).execute()
                     load_sys_config.clear()
-                    st.success("¡Secuencias inyectadas exitosamente! El Robot funcionará bajo estas reglas.")
+                    st.success(f"¡Secuencias inyectadas exitosamente! El Robot ahora usará el modo: {nv_modo}")
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
