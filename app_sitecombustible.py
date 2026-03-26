@@ -1409,13 +1409,16 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
             box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        /* Forzar color blanco puro y sombra oscura en TODOS los textos y etiquetas */
-        /* Esto soluciona la transparencia del texto contra la imagen de la refinería */
-        .st-emotion-cache-1629p8f h1, .st-emotion-cache-1629p8f h2, .st-emotion-cache-1629p8f h3, .st-emotion-cache-1629p8f h4, 
-        .st-emotion-cache-1629p8f p, .st-emotion-cache-1629p8f span, label, .stCheckbox label span {
+        /* Forzar color blanco puro y sombra oscura en TODOS los textos (Pestañas, Checkboxes, Etiquetas) */
+        div[data-testid="stForm"] label, div[data-testid="stForm"] p, div[data-testid="stForm"] span, div[data-testid="stTabs"] p, div[data-testid="stTabs"] span, div[data-testid="stTabs"] label {
             color: #ffffff !important;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+            text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
             font-weight: 500 !important;
+        }
+        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible */
+        input, select, textarea {
+            color: #000000 !important;
+            text-shadow: none !important;
         }
         </style>
     """, unsafe_allow_html=True)
