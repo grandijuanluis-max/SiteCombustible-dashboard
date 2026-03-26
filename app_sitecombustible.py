@@ -193,9 +193,26 @@ st.markdown(f"""
             color: #ffffff !important;
             font-weight: 500 !important;
         }}
-        
-
-        
+        /* LECCIONES APRENDIDAS: ALTA VISIBILIDAD DE FORMULARIOS */
+        /* Fondo oscuro para que resalten los formularios y selectores */
+        div[data-testid="stForm"], div[data-testid="stTabs"] {
+            background-color: rgba(15, 23, 42, 0.75) !important; 
+            border-radius: 12px;
+            padding: 2% 5%;
+            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Forzar color blanco puro y sombra oscura en TODOS los textos (Pestañas, Checkboxes, Etiquetas) */
+        div[data-testid="stForm"] label, div[data-testid="stForm"] p, div[data-testid="stForm"] span, div[data-testid="stTabs"] p, div[data-testid="stTabs"] span, div[data-testid="stTabs"] label {
+            color: #ffffff !important;
+            text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
+            font-weight: 500 !important;
+        }
+        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible */
+        input, select, textarea {
+            color: #000000 !important;
+            text-shadow: none !important;
+        }
 
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
@@ -1398,31 +1415,8 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
         lista_usuarios = []
         supabase = None
         
-    # Mejorar la legibilidad superponiendo un fondo semi-sólido a los formularios y forzando texto blanco
-    st.markdown("""
-        <style>
-        /* Fondo oscuro para que resalten los formularios y selectores */
-        div[data-testid="stForm"], div[data-testid="stTabs"] {
-            background-color: rgba(15, 23, 42, 0.75) !important; 
-            border-radius: 12px;
-            padding: 2% 5%;
-            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        /* Forzar color blanco puro y sombra oscura en TODOS los textos (Pestañas, Checkboxes, Etiquetas) */
-        div[data-testid="stForm"] label, div[data-testid="stForm"] p, div[data-testid="stForm"] span, div[data-testid="stTabs"] p, div[data-testid="stTabs"] span, div[data-testid="stTabs"] label {
-            color: #ffffff !important;
-            text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
-            font-weight: 500 !important;
-        }
-        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible */
-        input, select, textarea {
-            color: #000000 !important;
-            text-shadow: none !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
     
+
     t_crear, t_modificar, t_bloquear = st.tabs(["✨ Crear Credencial", "✏️ Modificar Accesos", "⛔ Bloquear / Baja"])
     
     with t_crear:
