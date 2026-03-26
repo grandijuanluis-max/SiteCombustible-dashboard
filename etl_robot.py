@@ -11,49 +11,55 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# ==========================================
-# ⚙️ MODO DE EJECUCIÓN DEL ROBOT
-# ==========================================
-# Opciones disponibles: 'LOCAL', 'DRIVE', 'FTP'
-# Cambiar esto para dictar de dónde el robot absorberá los Excel/CSV
-MODO_EJECUCION = 'DRIVE' 
-
-# Intento dinámico y 100% nativo de leer tu archivo oculto
+# LECTURA NATIVA DE SECRETOS BASE (Solo para acceder a Supabase)
 import os
-SUPABASE_URL = "https://ewwdsiewmdwbxoiguoas.supabase.co"
-SUPABASE_KEY = "CLAVE_OCULTA_POR_SEGURIDAD"
+import toml
+
+dir_base = os.path.dirname(os.path.abspath(__file__))
+ruta_secretos = os.path.join(dir_base, ".streamlit", "secrets.toml")
 
 try:
-    dir_base = os.path.dirname(os.path.abspath(__file__))
-    ruta_secretos = os.path.join(dir_base, ".streamlit", "secrets.toml")
     with open(ruta_secretos, "r", encoding="utf-8") as f:
-        for line in f:
-            if "SUPABASE_URL" in line and "=" in line:
-                SUPABASE_URL = line.split("=")[1].strip().strip('"').strip("'")
-            if "SUPABASE_KEY" in line and "=" in line:
-                SUPABASE_KEY = line.split("=")[1].strip().strip('"').strip("'")
+        SECRETS = toml.load(f)
 except Exception as e:
-    print(f"⚠️ No se pudo leer el archivo oculto local: {e}") 
+    print(f"⚠️ Error fatal leyendo la bóveda secreta base: {e}")
+    SECRETS = {}
+
+SUPABASE_URL = SECRETS.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+SUPABASE_KEY = SECRETS.get("SUPABASE_KEY", "CLAVE_OCULTA")
 
 print("🔌 Conectando a Supabase (Bóveda Central)...")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+print("📡 Consultando Directivas Estratégicas (DB Configuracion)...")
+try:
+    resp_conf = supabase.table("configuracion").select("*").eq("id", 1).execute()
+    db_conf = resp_conf.data[0] if resp_conf.data else {}
+except Exception as e:
+    print(f"🚨 Error crítico leyendo la tabla 'configuracion': {e}")
+    db_conf = {}
+
+# ==========================================
+# ⚙️ MODO DE EJECUCIÓN DEL ROBOT
+# ==========================================
+MODO_EJECUCION = str(db_conf.get("etl_modo", "LOCAL")).strip().upper()
+print(f"🤖 Despertando ETL Robot (Modo Dinámico: {MODO_EJECUCION})...")
 
 # ==========================================
 # ⚙️ CONFIGURACIÓN GOOGLE DRIVE
 # ==========================================
 DRIVE_CREDENTIALS_FILE = "secret_key.json"
-# Pega aquí el ID de las carpetas de Drive (lo sacas de la URL de Drive)
-DRIVE_CARPETA_ORIGEN_ID = "1_SH38TdW1AUSZ14pkcE7z4Dxk1lqMDq0"
-DRIVE_CARPETA_DESTINO_ID = "19u_KzOz3C2JaetZk1VAZ7uRi0S3S0til"
+DRIVE_CARPETA_ORIGEN_ID = str(db_conf.get("drive_origen", "")).strip()
+DRIVE_CARPETA_DESTINO_ID = str(db_conf.get("drive_destino", "")).strip()
 
 # ==========================================
 # ⚙️ CONFIGURACIÓN FTP / SFTP
 # ==========================================
-FTP_HOST = "ftp.tu-servidor.com"
-FTP_USER = "tu_usuario_ftp"
-FTP_PASS = "tu_clave_ftp"
-FTP_DIR_ORIGEN = "/pendientes/"
-FTP_DIR_DESTINO = "/procesados/"
+FTP_HOST = str(db_conf.get("ftp_host", "")).strip()
+FTP_USER = str(db_conf.get("ftp_user", "")).strip()
+FTP_PASS = str(db_conf.get("ftp_pass", "")).strip()
+FTP_DIR_ORIGEN = str(db_conf.get("ftp_origen", "/pendientes/")).strip()
+FTP_DIR_DESTINO = str(db_conf.get("ftp_destino", "/procesados/")).strip()
 
 # Carpetas Temporales de Prueba (El robot siempre trabaja en RAM/Disco Local)
 DIR_PENDIENTES = "temp_pendientes/"

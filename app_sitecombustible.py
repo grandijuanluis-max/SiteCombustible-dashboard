@@ -84,7 +84,46 @@ def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Comp
 # ==========================================
 # ⚙️ CONFIGURACIÓN Y ESTILO CORPORATIVO
 # ==========================================
-st.set_page_config(page_title="SiteCombustible Pro - Juan Luis Corporations", page_icon="📊", layout="wide")
+st.set_page_config(page_title="SiteCombustible Pro - Executive Hub", page_icon="📊", layout="wide")
+
+from supabase import create_client, Client
+import streamlit as st
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_sys_config():
+    try:
+        url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+        key = st.secrets.get("SUPABASE_KEY", "")
+        if key:
+            supabase_cli: Client = create_client(url, key)
+            resp = supabase_cli.table("configuracion").select("*").eq("id", 1).execute()
+            if resp.data:
+                return resp.data[0]
+    except Exception:
+        pass
+    return {
+        "empresa_nombre": "Neural Hub",
+        "logo_url": "🤖",
+        "etl_modo": "FTP",
+        "ftp_host": "", "ftp_user": "", "ftp_pass": "", "ftp_origen": "", "ftp_destino": "",
+        "drive_origen": "", "drive_destino": ""
+    }
+
+SYS_CONF = load_sys_config()
+
+def render_brand_title():
+    nombre = SYS_CONF.get("empresa_nombre", "Neural Hub")
+    logo = SYS_CONF.get("logo_url", "⛽")
+    
+    if str(logo).startswith("http") or str(logo).startswith("data:image"):
+        logo_html = f"<img src='{logo}' style='height: 3.5rem; vertical-align: middle; margin-right: 15px; border-radius: 8px;' />"
+    else:
+        logo_html = f"<span style='vertical-align: middle;'>{logo}</span>"
+        
+    main_title = f"<h1 style='text-align: center; font-size: 3.5rem; color: #ffffff;'>{logo_html} SiteCombustible {nombre}</h1>"
+    return main_title
+
+MAIN_TITLE_HTML = render_brand_title()
 
 import base64
 from pathlib import Path
@@ -441,7 +480,8 @@ def check_login():
                                         "inercia": str(r_norm.get('inercia', '')).strip().lower(),
                                         "mercado": str(r_norm.get('mercado', '')).strip().lower(),
                                         "copiloto": str(r_norm.get('copiloto', '')).strip().lower(),
-                                        "admin": str(r_norm.get('admin', '')).strip().lower()
+                                        "admin": str(r_norm.get('admin', '')).strip().lower(),
+                                        "can_config": str(r_norm.get('can_config', '')).strip().lower()
                                     }
                                     st.session_state.logged_in = True
                                     st.rerun()
@@ -556,6 +596,7 @@ if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
 if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
 if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
 if perms.get('admin') == 'si': all_pages.append("👥 GESTIÓN DE PERSONAL")
+if perms.get('can_config') == 'si': all_pages.append("⚙️ CONFIGURACIÓN")
 
 page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
 
@@ -570,7 +611,7 @@ app_page = st.session_state.app_page
 
 # --- TABLA DE ENRUTAMIENTO (ESTADO) ---
 if app_page == "🌐 HUB PRINCIPAL":
-    st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1e3a8a;'>⛽ SiteCombustible Neural Hub</h1>", unsafe_allow_html=True)
+    st.markdown(MAIN_TITLE_HTML, unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 1.2rem; margin-bottom: 3rem;'>Selecciona un módulo operativo para comenzar el análisis.</p>", unsafe_allow_html=True)
     
     # Diseñamos Botoneras Gigantes Dinámicas (solo se ven los autorizados, empaquetados a la izquierda)
@@ -588,6 +629,8 @@ if app_page == "🌐 HUB PRINCIPAL":
         modulos.append({"title": "### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.", "btn": "Ir a Copiloto", "target": "🧠 COPILOTO ESTRATÉGICO", "style": st.info})
     if perms.get('admin') == 'si':
         modulos.append({"title": "### 👥 Gestión de Personal\nAdministrar usuarios y permisos.", "btn": "Ir a Administración", "target": "👥 GESTIÓN DE PERSONAL", "style": st.error})
+    if perms.get('can_config') == 'si':
+        modulos.append({"title": "### ⚙️ Configuración del Sist.\nParámetros del Motor ETL y Visuales.", "btn": "Ir a Configuración", "target": "⚙️ CONFIGURACIÓN", "style": st.warning})
         
     if not modulos:
         st.error("⚠️ Acceso Restringido: No tienes permisos asignados a ningún módulo. Contacta al administrador para que agregue un 'si' en tus columnas.")
@@ -1341,47 +1384,214 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
 # --- TAB EXTRA: GESTIÓN DE PERSONAL (ADMIN RBAC) ---
 if app_page == "👥 GESTIÓN DE PERSONAL":
     st.markdown("<h2 style='color:#ffffff'>👥 Panel de Control de Administradores</h2>", unsafe_allow_html=True)
-    st.info("💡 Desde aquí podés crear nuevas credenciales para que tu equipo acceda a la plataforma.")
+    st.info("💡 Desde aquí podés crear nuevas credenciales, modificar permisos de tu equipo o dar de baja a usuarios.")
     
-    with st.form("form_alta_usuario", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        n_user = col1.text_input("Usuario (Nombre de acceso corto)")
-        n_mail = col2.text_input("Email Corporativo")
-        n_pass = st.text_input("Contraseña Temporal", type="password")
+    # 📡 Descargar lista de usuarios en caliente
+    try:
+        url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+        key = st.secrets.get("SUPABASE_KEY", "CLAVE_OCULTA")
+        supabase = create_client(url, key)
+        resp_usrs = supabase.table("usuarios").select("*").execute()
+        lista_usuarios = resp_usrs.data
+    except Exception as e:
+        st.error(f"Error técnico recuperando la bóveda de usuarios: {e}")
+        lista_usuarios = []
+        supabase = None
         
-        st.markdown("### 🔑 Permisos Asignados al Usuario")
-        p_ing = st.checkbox("🚀 INGESTA & CARGA (Permitir subir archivos)")
-        p_vis = st.checkbox("🏠 VISIÓN EJECUTIVA (Acceso al HUB Principal)")
-        p_ine = st.checkbox("📈 INERCIA TEMPORAL (Acceso al Histórico)")
-        p_mer = st.checkbox("🍩 PODER DE MERCADO (Mapas y Market Share)")
-        p_cop = st.checkbox("🧠 COPILOTO (Motor Neuronal y Predicciones)")
-        p_adm = st.checkbox("👑 MODO DIOS (Puede crear/borrar otros usuarios)")
-        
-        btn_crear = st.form_submit_button("Crear Nueva Credencial", type="primary", use_container_width=True)
-        
-        if btn_crear:
-            if not n_user.strip() or not n_pass.strip():
-                st.error("❌ El Usuario y la Contraseña son obligatorios.")
-            else:
+    t_crear, t_modificar, t_bloquear = st.tabs(["✨ Crear Credencial", "✏️ Modificar Accesos", "⛔ Bloquear / Baja"])
+    
+    with t_crear:
+        with st.form("form_alta_usuario", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            n_user = col1.text_input("Usuario (Nombre de acceso corto)")
+            n_mail = col2.text_input("Email Corporativo")
+            n_pass = st.text_input("Contraseña Temporal", type="password")
+            
+            st.markdown("### 🔑 Permisos Asignados al Usuario")
+            p_ing = st.checkbox("🚀 INGESTA & CARGA (Permitir subir archivos)")
+            p_vis = st.checkbox("🏠 VISIÓN EJECUTIVA (Acceso al HUB Principal)")
+            p_ine = st.checkbox("📈 INERCIA TEMPORAL (Acceso al Histórico)")
+            p_mer = st.checkbox("🍩 PODER DE MERCADO (Mapas y Market Share)")
+            p_cop = st.checkbox("🧠 COPILOTO (Motor Neuronal y Predicciones)")
+            p_adm = st.checkbox("👑 MODO DIOS (Puede crear/borrar otros usuarios)")
+            p_cfg = st.checkbox("⚙️ CONFIGURACIÓN (Control Motor ETL y Logo)")
+            
+            btn_crear = st.form_submit_button("Crear Nueva Credencial", type="primary", use_container_width=True)
+            
+            if btn_crear:
+                if not n_user.strip() or not n_pass.strip():
+                    st.error("❌ El Usuario y la Contraseña son obligatorios.")
+                elif supabase:
+                    try:
+                        nuevo_registro = {
+                            "usuario": n_user.strip(),
+                            "mail": n_mail.strip(),
+                            "password": n_pass.strip(),
+                            "ingesta": "si" if p_ing else "no",
+                            "vision": "si" if p_vis else "no",
+                            "inercia": "si" if p_ine else "no",
+                            "mercado": "si" if p_mer else "no",
+                            "copiloto": "si" if p_cop else "no",
+                            "admin": "si" if p_adm else "no",
+                            "can_config": "si" if p_cfg else "no"
+                        }
+                        supabase.table("usuarios").insert(nuevo_registro).execute()
+                        st.success(f"✅ ¡Usuario '{n_user}' creado exitosamente en la bóveda! Ya puede iniciar sesión.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"🚨 Falla crítica guardando en Supabase: {e}")
+
+    with t_modificar:
+        st.subheader("Auditoría y Edición de Accesos")
+        if not lista_usuarios:
+            st.warning("No se encontraron usuarios en la bóveda.")
+        else:
+            opciones_mod = {f"{u.get('usuario', 'S/D')} ({u.get('mail', 'S/D')})": u for u in lista_usuarios}
+            sel_mod = st.selectbox("Seleccionar Empleado a Modificar", list(opciones_mod.keys()), key="sel_mod")
+            
+            if sel_mod:
+                user_data = opciones_mod[sel_mod]
+                
+                with st.form("form_edit_user"):
+                    e_user = st.text_input("Usuario (Nombre)", value=user_data.get('usuario', ''))
+                    e_mail = st.text_input("Email Corporativo", value=user_data.get('mail', ''))
+                    e_pass = st.text_input("Contraseña (Dejar igual si no se cambia)", value=user_data.get('password', ''), type="password")
+                    
+                    st.markdown("### 🔑 Ajustar Nivel de Autorización")
+                    e_ing = st.checkbox("🚀 INGESTA & CARGA", value=(str(user_data.get('ingesta', '')).lower() == 'si'))
+                    e_vis = st.checkbox("🏠 VISIÓN EJECUTIVA", value=(str(user_data.get('vision', '')).lower() == 'si'))
+                    e_ine = st.checkbox("📈 INERCIA TEMPORAL", value=(str(user_data.get('inercia', '')).lower() == 'si'))
+                    e_mer = st.checkbox("🍩 PODER DE MERCADO", value=(str(user_data.get('mercado', '')).lower() == 'si'))
+                    e_cop = st.checkbox("🧠 COPILOTO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
+                    e_adm = st.checkbox("👑 MODO DIOS", value=(str(user_data.get('admin', '')).lower() == 'si'))
+                    e_cfg = st.checkbox("⚙️ CONFIGURACIÓN", value=(str(user_data.get('can_config', '')).lower() == 'si'))
+                    
+                    btn_edit = st.form_submit_button("Actualizar Accesos en Vivo", type="primary", use_container_width=True)
+                    if btn_edit and supabase:
+                        try:
+                            supabase.table("usuarios").update({
+                                "usuario": e_user.strip(),
+                                "mail": e_mail.strip(),
+                                "password": e_pass.strip(),
+                                "ingesta": "si" if e_ing else "no",
+                                "vision": "si" if e_vis else "no",
+                                "inercia": "si" if e_ine else "no",
+                                "mercado": "si" if e_mer else "no",
+                                "copiloto": "si" if e_cop else "no",
+                                "admin": "si" if e_adm else "no",
+                                "can_config": "si" if e_cfg else "no"
+                            }).eq("id", user_data['id']).execute()
+                            st.success("✅ ¡Permisos inyectados con éxito a la Base de Datos!")
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error actualizando usuario: {e}")
+
+    with t_bloquear:
+        st.subheader("Congelamiento y Baja Definitiva")
+        if not lista_usuarios:
+            st.warning("No se encontraron usuarios.")
+        else:
+            opciones_baja = {f"{u.get('usuario', 'S/D')} ({u.get('mail', 'S/D')})": u for u in lista_usuarios}
+            sel_baja = st.selectbox("Seleccionar Empleado", list(opciones_baja.keys()), key="sel_baja")
+            
+            if sel_baja:
+                user_del = opciones_baja[sel_baja]
+                st.error(f"⚠️ **ATENCIÓN:** Estás a punto de alterar el acceso de **{user_del.get('usuario')}**.")
+                st.write("Podés decidir quitarle todos los permisos (Congelar la cuenta para mantener el historial) o borrar por completo el registro de la Base de Datos.")
+                
+                colA, colB = st.columns(2)
+                with colA:
+                    if st.button("⛔ Congelar Cuenta (Remover todo permiso)", use_container_width=True):
+                        if supabase:
+                            try:
+                                supabase.table("usuarios").update({
+                                    "ingesta": "no", "vision": "no", "inercia": "no",
+                                    "mercado": "no", "copiloto": "no", "admin": "no", "can_config": "no"
+                                }).eq("id", user_del['id']).execute()
+                                st.success("Cuenta archivada de forma segura.")
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                with colB:
+                    if st.button("🗑️ Eliminar Usuario Definitivamente", type="primary", use_container_width=True):
+                        if supabase:
+                            try:
+                                supabase.table("usuarios").delete().eq("id", user_del['id']).execute()
+                                st.success("Registro de usuario aniquilado permanentemente.")
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Falla en la Bóveda al borrar: {e}")
+
+# --- TAB EXTRA: CONFIGURACION (SUPERADMIN) ---
+if app_page == "⚙️ CONFIGURACIÓN":
+    st.markdown("## ⚙️ Configuración del Sistema")
+    st.info("Estos ajustes alteran la interfaz gráfica pública y los parámetros del Robot Automático (Data Pipeline).")
+    
+    t1, t2 = st.tabs(["🎨 Identidad de Empresa (Branding)", "🔌 Motor de Datos (Arquitectura ETL)"])
+    
+    with t1:
+        with st.form("form_branding"):
+            st.subheader("Configuración Visual")
+            nv_nombre = st.text_input("Sufijo del Título Comercial", value=SYS_CONF.get("empresa_nombre", "Neural Hub"), help="Reemplaza la palabra 'Neural Hub' en el título general.")
+            nv_logo = st.text_input("URL del Logo (Formato http:// o un Emoji)", value=SYS_CONF.get("logo_url", "🤖"), help="Reemplaza el ícono del tanque/robot general.")
+            
+            sub_brand = st.form_submit_button("💾 Guardar Brand System", type="primary")
+            if sub_brand:
                 try:
-                    url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
-                    key = st.secrets.get("SUPABASE_KEY", "CLAVE_OCULTA_POR_SEGURIDAD")
-                    supabase = create_client(url, key)
-                    
-                    nuevo_registro = {
-                        "usuario": n_user.strip(),
-                        "mail": n_mail.strip(),
-                        "password": n_pass.strip(),
-                        "ingesta": "si" if p_ing else "no",
-                        "vision": "si" if p_vis else "no",
-                        "inercia": "si" if p_ine else "no",
-                        "mercado": "si" if p_mer else "no",
-                        "copiloto": "si" if p_cop else "no",
-                        "admin": "si" if p_adm else "no"
-                    }
-                    
-                    res_alta = supabase.table("usuarios").insert(nuevo_registro).execute()
-                    st.success(f"✅ ¡Usuario '{n_user}' creado exitosamente en la bóveda! Ya puede iniciar sesión.")
-                    st.balloons()
+                    url = st.secrets.get("SUPABASE_URL")
+                    key = st.secrets.get("SUPABASE_KEY")
+                    sc: Client = create_client(url, key)
+                    sc.table("configuracion").update({"empresa_nombre": nv_nombre, "logo_url": nv_logo}).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success("¡Marca registrada con éxito! Aplicando cambios...")
+                    time.sleep(1)
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"🚨 Falla crítica guardando en Supabase: {e}")
+                    st.error(f"Error escribiendo en Bóveda: {e}")
+                    
+    with t2:
+        with st.form("form_etl"):
+            st.subheader("Orquesta del Inyector de Datos (Nocturno)")
+            import time
+            metodos = ["FTP", "DRIVE", "LOCAL"]
+            idx_modo = metodos.index(SYS_CONF.get("etl_modo", "FTP").upper()) if SYS_CONF.get("etl_modo", "FTP").upper() in metodos else 0
+            nv_modo = st.selectbox("Método de Extracción Satelital (ETL Automático)", metodos, index=idx_modo)
+            
+            st.divider()
+            colA, colB = st.columns(2)
+            with colA:
+                st.markdown("#### 🌐 Parámetros FTP Corporativo")
+                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=SYS_CONF.get("ftp_host", ""))
+                nv_fu = st.text_input("Usuario (Login ID)", value=SYS_CONF.get("ftp_user", ""))
+                nv_fp = st.text_input("Secure Password", value=SYS_CONF.get("ftp_pass", ""), type="password")
+                nv_fo = st.text_input("Carpeta Lectura Crudos", value=SYS_CONF.get("ftp_origen", "/pendientes/"))
+                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=SYS_CONF.get("ftp_destino", "/procesados/"))
+            with colB:
+                st.markdown("#### ☁️ Parámetros Google Drive")
+                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=SYS_CONF.get("drive_origen", ""))
+                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=SYS_CONF.get("drive_destino", ""))
+                
+            sub_etl = st.form_submit_button("🔥 Enviar Instrucciones al Robot ETL", type="primary", use_container_width=True)
+            if sub_etl:
+                try:
+                    url = st.secrets.get("SUPABASE_URL")
+                    key = st.secrets.get("SUPABASE_KEY")
+                    sc: Client = create_client(url, key)
+                    sc.table("configuracion").update({
+                        "etl_modo": nv_modo,
+                        "ftp_host": nv_fh, "ftp_user": nv_fu, "ftp_pass": nv_fp, 
+                        "ftp_origen": nv_fo, "ftp_destino": nv_fd,
+                        "drive_origen": nv_do, "drive_destino": nv_dd
+                    }).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success("¡Secuencias inyectadas exitosamente! El Robot funcionará bajo estas reglas.")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error cableando el Motor ETL: {e}")
