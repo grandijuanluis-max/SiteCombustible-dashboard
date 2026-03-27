@@ -1432,6 +1432,20 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
 
 # --- TAB 5: ANÁLISIS DE DATOS PUROS ---
 if app_page == "📊 ANÁLISIS DE DATOS PUROS":
+    st.markdown("""
+    <style>
+    /* Forzar visibilidad de los encabezados de las grillas Dataframes */
+    div[data-testid="stDataFrame"] th {
+        background-color: #2b3a55 !important;
+        color: #ffffff !important;
+        font-weight: bold !important;
+    }
+    div[data-testid="stDataFrame"] th span {
+        color: #ffffff !important;
+        font-weight: bold !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown("<h2 style='color:#ffffff'>📊 Análisis de Datos Puros</h2>", unsafe_allow_html=True)
     if not dff.empty:
         d_puros = dff.copy()
@@ -1477,21 +1491,25 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         # --- VISTA 2: Resumen Mensual ---
         st.markdown("#### Resumen Mensual por Cliente")
         # Aseguramos columnas anio y mes por si falló el parse
-        if 'anio' not in d_puros.columns: d_puros['anio'] = "S/D"
-        if 'mes' not in d_puros.columns: d_puros['mes'] = "S/D"
+        if 'anio' not in d_puros.columns: d_puros['anio'] = "0000"
+        if 'mes' not in d_puros.columns: d_puros['mes'] = "00"
+        if 'codigo' not in d_puros.columns: d_puros['codigo'] = "S/D"
         
-        t2 = d_puros.groupby(["anio", "mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+        t2 = d_puros.groupby(["anio", "mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
         
-        t2_ui = t2.drop(columns=["domicilio"])
-        t2_ui.columns = ["Año", "Mes", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        # Formateamos columna sintética de mes/año
+        t2['fecha_mes'] = t2['mes'].astype(str).str.zfill(2) + '/' + t2['anio'].astype(str)
+        
+        t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
+        t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
         st.dataframe(t2_ui, use_container_width=True)
         
-        t2_exp = t2.rename(columns={
-            "anio": "Año", "mes": "Mes", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+        t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
+            "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+            "nombre": "Cliente (Nombre)", "codigo": "Código", "subti_comb": "Subtipo Combustible",
             "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
         })
         
@@ -1517,19 +1535,20 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             t3['fecha_corta'] = t3['fecha_dt'].dt.strftime('%d/%m/%Y')
         else:
             t3['fecha_corta'] = "S/D"
+        if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
 
-        t3_ag = t3.groupby(["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+        t3_ag = t3.groupby(["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
 
-        t3_ui = t3_ag.drop(columns=["domicilio"])
-        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
+        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
         st.dataframe(t3_ui, use_container_width=True)
 
-        t3_exp = t3_ag.rename(columns={
+        t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
             "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+            "nombre": "Cliente (Nombre)", "codigo": "Código", "subti_comb": "Subtipo Combustible",
             "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
         })
 
