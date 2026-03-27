@@ -228,10 +228,10 @@ st.markdown(f"""
             font-weight: 500 !important;
         }}
         /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible, y blanco si la app esta oscurecida globalmente */
-        input, select, textarea {
+        input, select, textarea {{
             color: #ffffff !important;
             text-shadow: none !important;
-        }
+        }}
 
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
