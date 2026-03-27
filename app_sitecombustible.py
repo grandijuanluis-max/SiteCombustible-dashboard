@@ -1436,12 +1436,12 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
     <style>
     /* Forzar visibilidad de los encabezados de las grillas Dataframes */
     div[data-testid="stDataFrame"] th {
-        background-color: #2b3a55 !important;
-        color: #ffffff !important;
+        background-color: #ffcccc !important;
+        color: #000000 !important;
         font-weight: bold !important;
     }
     div[data-testid="stDataFrame"] th span {
-        color: #ffffff !important;
+        color: #000000 !important;
         font-weight: bold !important;
     }
     </style>
@@ -1500,6 +1500,11 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
         
+        # Orden Cronológico
+        t2['anio_num'] = pd.to_numeric(t2['anio'], errors='coerce').fillna(0)
+        t2['mes_num'] = pd.to_numeric(t2['mes'], errors='coerce').fillna(0)
+        t2 = t2.sort_values(by=['anio_num', 'mes_num'], ascending=[True, True])
+        
         # Formateamos columna sintética de mes/año
         t2['fecha_mes'] = t2['mes'].astype(str).str.zfill(2) + '/' + t2['anio'].astype(str)
         
@@ -1531,16 +1536,19 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         st.markdown("#### Detalle Abierto de Base")
         t3 = d_puros.copy()
         if 'fecha_dt' in t3.columns:
-            t3 = t3.dropna(subset=['fecha_dt']) # Drop null dates for parsing
-            t3['fecha_corta'] = t3['fecha_dt'].dt.strftime('%d/%m/%Y')
+            t3 = t3.dropna(subset=['fecha_dt'])
         else:
-            t3['fecha_corta'] = "S/D"
+            t3['fecha_dt'] = pd.NaT
+
         if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
 
-        t3_ag = t3.groupby(["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
+        t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"], dropna=False).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
+
+        t3_ag = t3_ag.sort_values(by="fecha_dt", ascending=True)
+        t3_ag['fecha_corta'] = t3_ag['fecha_dt'].dt.strftime('%d/%m/%Y').fillna("S/D")
 
         t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
         t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
