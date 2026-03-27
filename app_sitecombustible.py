@@ -31,16 +31,19 @@ def generar_excel_corporativo(df_export, formato='xlsx'):
         df_export.to_csv(output, index=False)
     return output.getvalue()
 
-def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Completo"):
-    pdf = FPDF()
+def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Completo", orientacion="P"):
+    pdf = FPDF(orientation=orientacion)
     pdf.add_page()
     # --- Encabezado Institucional ---
+    empresa_nombre = SYS_CONF.get("empresa_nombre", "JUAN LUIS CORPORATIONS")
     pdf.set_font("Arial", "B", 16)
     pdf.set_text_color(30, 58, 138) # Azul Corporativo
-    pdf.cell(0, 10, "JUAN LUIS CORPORATIONS - SITECOMBUSTIBLE PRO", ln=True, align="C")
+    pdf.cell(0, 10, f"{empresa_nombre.upper()} - SITECOMBUSTIBLE PRO", ln=True, align="C")
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, titulo_reporte.upper(), ln=True, align="C")
-    pdf.line(10, 32, 200, 32)
+    
+    ancho_linea = 280 if orientacion == "L" else 200
+    pdf.line(10, 32, ancho_linea, 32)
     pdf.ln(5)
 
     # --- Subtítulo y Filtros (Izquierda) ---
@@ -61,7 +64,8 @@ def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Comp
     pdf.set_text_color(0)
     
     cols = df_export.columns
-    col_width = 190 / len(cols)
+    p_width = 277 if orientacion == "L" else 190
+    col_width = p_width / len(cols)
     for col in cols:
         pdf.cell(col_width, 8, str(col).upper(), 1, 0, 'C', True)
     pdf.ln()
@@ -73,11 +77,12 @@ def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Comp
         pdf.ln()
 
     # --- Pie de Página (Trazabilidad) ---
+    y_linea = 195 if orientacion == "L" else 270
     pdf.set_y(-25)
-    pdf.line(10, 270, 200, 270)
+    pdf.line(10, y_linea, ancho_linea, y_linea)
     pdf.set_font("Arial", "I", 7)
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    pdf.cell(0, 10, f"Emitido por: SiteCombustible Pro System | Usuario: Juan Luis Corporations | Emisión: {now}", align="L")
+    pdf.cell(0, 10, f"Emitido por: SiteCombustible Pro System | Empresa: {empresa_nombre} | Emisión: {now}", align="L")
     pdf.cell(0, 10, f"Página {pdf.page_no()}", align="R")
     
     return pdf.output(dest='S').encode('latin-1')
@@ -222,11 +227,11 @@ st.markdown(f"""
             text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
             font-weight: 500 !important;
         }}
-        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible */
-        input, select, textarea {{
-            color: #000000 !important;
+        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible, y blanco si la app esta oscurecida globalmente */
+        input, select, textarea {
+            color: #ffffff !important;
             text-shadow: none !important;
-        }}
+        }
 
         /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
         [data-testid="stAlert"] * {{
@@ -406,7 +411,7 @@ def load_data():
                     df[col] = 0.0
             
             # Prevenir colapsos si no vienen las columnas
-            for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'id_unique', 'bandera']:
+            for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'id_unique', 'bandera', 'detalle']:
                 if c not in df.columns: df[c] = "S/D"
                 else: df[c] = df[c].fillna("S/D")
                 
@@ -722,11 +727,11 @@ if app_page == "🚀 INGESTA & CARGA":
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
         # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
-        for c in ['proveedor', 'localidad', 'provincia', 'domicilio', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera']:
+        for c in ['proveedor', 'localidad', 'provincia', 'domicilio', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera', 'detalle']:
             if c not in df_new.columns: df_new[c] = "S/D"
 
         # Normalización Extremadamente Estricta pre-hashing para eliminar .0 rebeldes de Pandas
-        for c in ['formulario', 'numero', 'codigo', 'nombre']:
+        for c in ['formulario', 'numero', 'codigo', 'nombre', 'detalle']:
             if c in df_new.columns: df_new[c] = df_new[c].apply(normalize_id_col)
 
         # Aseguramos columnas numéricas sin S/D de manera segura evitando Null Pointers
@@ -1494,8 +1499,9 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             t2_base['fecha_mes'] = "S/D"
             
         if 'codigo' not in t2_base.columns: t2_base['codigo'] = "S/D"
+        if 'detalle' not in t2_base.columns: t2_base['detalle'] = "S/D"
         
-        t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
+        t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"]).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
@@ -1503,8 +1509,8 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         # Orden Cronológico Genuino y definitivo
         t2 = t2.sort_values(by=['sort_ym'], ascending=True)
         
-        t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
-        t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+        t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
         st.dataframe(
             t2_ui, 
             use_container_width=True,
@@ -1514,9 +1520,9 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             }
         )
         
-        t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
+        t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
             "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "codigo": "Código", "subti_comb": "Subtipo Combustible",
+            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
             "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
         })
         
@@ -1543,8 +1549,9 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             t3['fecha_dt'] = pd.NaT
 
         if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
+        if 'detalle' not in t3.columns: t3['detalle'] = "S/D"
 
-        t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"], dropna=False).agg(
+        t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"], dropna=False).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
@@ -1552,8 +1559,8 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         t3_ag = t3_ag.sort_values(by="fecha_dt", ascending=True)
         t3_ag['fecha_corta'] = t3_ag['fecha_dt'].dt.strftime('%d/%m/%Y').fillna("S/D")
 
-        t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
-        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
         st.dataframe(
             t3_ui, 
             use_container_width=True,
@@ -1563,9 +1570,9 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             }
         )
 
-        t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
+        t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
             "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "codigo": "Código", "subti_comb": "Subtipo Combustible",
+            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
             "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
         })
 
@@ -1575,7 +1582,7 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
             fmt_dp3 = ed3_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp3")
             mod_dp3 = ed3_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp3", horizontal=True)
             if fmt_dp3 == "PDF":
-                btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3)
+                btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3, orientacion="L")
                 st.download_button("Descargar Reporte PDF  ", btn_dp3, "Detalle_Abierto.pdf", "application/pdf")
             else:
                 btn_xdp3 = generar_excel_corporativo(t3_exp, fmt_dp3.lower())
