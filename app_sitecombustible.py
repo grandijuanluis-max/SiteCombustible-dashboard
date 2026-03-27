@@ -1490,23 +1490,25 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         
         # --- VISTA 2: Resumen Mensual ---
         st.markdown("#### Resumen Mensual por Cliente")
-        # Aseguramos columnas anio y mes por si falló el parse
-        if 'anio' not in d_puros.columns: d_puros['anio'] = "0000"
-        if 'mes' not in d_puros.columns: d_puros['mes'] = "00"
-        if 'codigo' not in d_puros.columns: d_puros['codigo'] = "S/D"
+        t2_base = d_puros.copy()
         
-        t2 = d_puros.groupby(["anio", "mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
+        if 'fecha_dt' in t2_base.columns:
+            # Creamos una máscara de ordenación (YYYY-MM) y la máscara visual directamente del campo original Datetime real
+            t2_base['sort_ym'] = t2_base['fecha_dt'].dt.strftime('%Y-%m').fillna('0000-00')
+            t2_base['fecha_mes'] = t2_base['fecha_dt'].dt.strftime('%m/%Y').fillna('S/D')
+        else:
+            t2_base['sort_ym'] = "0000-00"
+            t2_base['fecha_mes'] = "S/D"
+            
+        if 'codigo' not in t2_base.columns: t2_base['codigo'] = "S/D"
+        
+        t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb"]).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
         ).reset_index()
         
-        # Orden Cronológico
-        t2['anio_num'] = pd.to_numeric(t2['anio'], errors='coerce').fillna(0)
-        t2['mes_num'] = pd.to_numeric(t2['mes'], errors='coerce').fillna(0)
-        t2 = t2.sort_values(by=['anio_num', 'mes_num'], ascending=[True, True])
-        
-        # Formateamos columna sintética de mes/año
-        t2['fecha_mes'] = t2['mes'].astype(str).str.zfill(2) + '/' + t2['anio'].astype(str)
+        # Orden Cronológico Genuino y definitivo
+        t2 = t2.sort_values(by=['sort_ym'], ascending=True)
         
         t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
         t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
