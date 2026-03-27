@@ -1432,25 +1432,6 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
 
 # --- TAB 5: ANÁLISIS DE DATOS PUROS ---
 if app_page == "📊 ANÁLISIS DE DATOS PUROS":
-    st.markdown("""
-    <style>
-    /* Forzar visibilidad de los encabezados de las grillas Dataframes transparentando el fondo feo y resaltando letras en blanco puro */
-    div[data-testid="stDataFrame"] th {
-        background-color: transparent !important;
-        color: #ffffff !important;
-        font-weight: 800 !important;
-        font-size: 1.1rem !important;
-    }
-    div[data-testid="stDataFrame"] th span {
-        color: #ffffff !important;
-        font-weight: 800 !important;
-        font-size: 1.1rem !important;
-    }
-    div[data-testid="stDataFrame"] table {
-        color: #ffffff !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
     st.markdown("<h2 style='color:#ffffff'>📊 Análisis de Datos Puros</h2>", unsafe_allow_html=True)
     if not dff.empty:
         d_puros = dff.copy()
@@ -1471,7 +1452,14 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         
         t1_ui = t1.drop(columns=["domicilio"])
         t1_ui.columns = ["Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(t1_ui.style.set_table_styles([{'selector': 'th', 'props': [('color', 'white'), ('background-color', 'rgba(15, 23, 42, 0.6)')]}]), use_container_width=True)
+        st.dataframe(
+            t1_ui, 
+            use_container_width=True,
+            column_config={
+                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+            }
+        )
         
         t1_exp = t1.rename(columns={
             "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
@@ -1517,7 +1505,14 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         
         t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
         t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(t2_ui.style.set_table_styles([{'selector': 'th', 'props': [('color', 'white'), ('background-color', 'rgba(15, 23, 42, 0.6)')]}]), use_container_width=True)
+        st.dataframe(
+            t2_ui, 
+            use_container_width=True,
+            column_config={
+                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+            }
+        )
         
         t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
             "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
@@ -1559,7 +1554,14 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
 
         t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "codigo", "subti_comb", "volumen", "ventas"]]
         t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Código", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(t3_ui.style.set_table_styles([{'selector': 'th', 'props': [('color', 'white'), ('background-color', 'rgba(15, 23, 42, 0.6)')]}]), use_container_width=True)
+        st.dataframe(
+            t3_ui, 
+            use_container_width=True,
+            column_config={
+                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+            }
+        )
 
         t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "codigo", "subti_comb", "volumen", "ventas"]].rename(columns={
             "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
