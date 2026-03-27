@@ -511,6 +511,7 @@ def check_login():
                                         "inercia": str(r_norm.get('inercia', '')).strip().lower(),
                                         "mercado": str(r_norm.get('mercado', '')).strip().lower(),
                                         "copiloto": str(r_norm.get('copiloto', '')).strip().lower(),
+                                        "datos": str(r_norm.get('datos', '')).strip().lower(),
                                         "admin": str(r_norm.get('admin', '')).strip().lower(),
                                         "can_config": str(r_norm.get('can_config', '')).strip().lower()
                                     }
@@ -626,6 +627,7 @@ if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
 if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
 if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
 if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+if perms.get('datos') == 'si': all_pages.append("📊 ANÁLISIS DE DATOS PUROS")
 if perms.get('admin') == 'si': all_pages.append("👥 GESTIÓN DE PERSONAL")
 if perms.get('can_config') == 'si': all_pages.append("⚙️ CONFIGURACIÓN")
 
@@ -658,6 +660,8 @@ if app_page == "🌐 HUB PRINCIPAL":
         modulos.append({"title": "### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.", "btn": "Ir a Mercado", "target": "🍩 PODER DE MERCADO", "style": st.error})
     if perms.get('copiloto') == 'si':
         modulos.append({"title": "### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.", "btn": "Ir a Copiloto", "target": "🧠 COPILOTO ESTRATÉGICO", "style": st.info})
+    if perms.get('datos') == 'si':
+        modulos.append({"title": "### 📊 Datos Puros\nTablas estáticas y exportaciones crudas.", "btn": "Ir a Datos Puros", "target": "📊 ANÁLISIS DE DATOS PUROS", "style": st.success})
     if perms.get('admin') == 'si':
         modulos.append({"title": "### 👥 Gestión de Personal\nAdministrar usuarios y permisos.", "btn": "Ir a Administración", "target": "👥 GESTIÓN DE PERSONAL", "style": st.error})
     if perms.get('can_config') == 'si':
@@ -718,7 +722,7 @@ if app_page == "🚀 INGESTA & CARGA":
         df_new = df_new.loc[:, ~df_new.columns.duplicated()]
         
         # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
-        for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera']:
+        for c in ['proveedor', 'localidad', 'provincia', 'domicilio', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera']:
             if c not in df_new.columns: df_new[c] = "S/D"
 
         # Normalización Extremadamente Estricta pre-hashing para eliminar .0 rebeldes de Pandas
@@ -1426,6 +1430,124 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
     else:
         st.warning("⚠️ Sin datos para procesar en el Copiloto Estratégico.")
 
+# --- TAB 5: ANÁLISIS DE DATOS PUROS ---
+if app_page == "📊 ANÁLISIS DE DATOS PUROS":
+    st.markdown("<h2 style='color:#ffffff'>📊 Análisis de Datos Puros</h2>", unsafe_allow_html=True)
+    if not dff.empty:
+        d_puros = dff.copy()
+        if 'domicilio' not in d_puros.columns:
+            d_puros['domicilio'] = "S/D"
+            
+        str_fechas_dp = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros_dp = f"Fechas: {str_fechas_dp} | Provincia: {sel_prov or 'Todas'} | Localidad: {sel_loc or 'Todas'} | Combustible: {sel_sub or 'Todos'}"
+
+        st.info("💡 En esta sección puedes auditar y descargar los datos crudos en grillas estáticas. Las exportaciones corporativas incluirán automáticamente la columna 'Domicilio'.")
+
+        # --- VISTA 1: Resumen por Cliente ---
+        st.markdown("#### Resumen por Cliente")
+        t1 = d_puros.groupby(["provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+        ).reset_index()
+        
+        t1_ui = t1.drop(columns=["domicilio"])
+        t1_ui.columns = ["Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        st.dataframe(t1_ui, use_container_width=True)
+        
+        t1_exp = t1.rename(columns={
+            "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+        })
+        
+        col_dp1, _ = st.columns([1, 2])
+        with col_dp1.expander("📥 Exportar Resumen Cliente", expanded=False):
+            ed1_1, ed1_2 = st.columns(2)
+            fmt_dp1 = ed1_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp1")
+            mod_dp1 = ed1_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp1", horizontal=True)
+            if fmt_dp1 == "PDF":
+                btn_dp1 = generar_pdf_corporativo(t1_exp, "Resumen General por Cliente", txt_filtros_dp, mod_dp1)
+                st.download_button("Descargar Reporte PDF", btn_dp1, "Resumen_Cliente.pdf", "application/pdf")
+            else:
+                btn_xdp1 = generar_excel_corporativo(t1_exp, fmt_dp1.lower())
+                st.download_button(f"Descargar Archivo {fmt_dp1}", btn_xdp1, f"Resumen_Cliente.{fmt_dp1.lower()}")
+
+        st.markdown("---")
+        
+        # --- VISTA 2: Resumen Mensual ---
+        st.markdown("#### Resumen Mensual por Cliente")
+        # Aseguramos columnas anio y mes por si falló el parse
+        if 'anio' not in d_puros.columns: d_puros['anio'] = "S/D"
+        if 'mes' not in d_puros.columns: d_puros['mes'] = "S/D"
+        
+        t2 = d_puros.groupby(["anio", "mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+        ).reset_index()
+        
+        t2_ui = t2.drop(columns=["domicilio"])
+        t2_ui.columns = ["Año", "Mes", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        st.dataframe(t2_ui, use_container_width=True)
+        
+        t2_exp = t2.rename(columns={
+            "anio": "Año", "mes": "Mes", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+        })
+        
+        col_dp2, _ = st.columns([1, 2])
+        with col_dp2.expander("📥 Exportar Resumen Mensual", expanded=False):
+            ed2_1, ed2_2 = st.columns(2)
+            fmt_dp2 = ed2_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp2")
+            mod_dp2 = ed2_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp2", horizontal=True)
+            if fmt_dp2 == "PDF":
+                btn_dp2 = generar_pdf_corporativo(t2_exp, "Agrupacion Mensual por Cliente", txt_filtros_dp, mod_dp2)
+                st.download_button("Descargar Reporte PDF ", btn_dp2, "Resumen_Mensual.pdf", "application/pdf")
+            else:
+                btn_xdp2 = generar_excel_corporativo(t2_exp, fmt_dp2.lower())
+                st.download_button(f"Descargar Archivo {fmt_dp2} ", btn_xdp2, f"Resumen_Mensual.{fmt_dp2.lower()}")
+
+        st.markdown("---")
+
+        # --- VISTA 3: Base Abierta ---
+        st.markdown("#### Detalle Abierto de Base")
+        t3 = d_puros.copy()
+        if 'fecha_dt' in t3.columns:
+            t3 = t3.dropna(subset=['fecha_dt']) # Drop null dates for parsing
+            t3['fecha_corta'] = t3['fecha_dt'].dt.strftime('%d/%m/%Y')
+        else:
+            t3['fecha_corta'] = "S/D"
+
+        t3_ag = t3.groupby(["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+        ).reset_index()
+
+        t3_ui = t3_ag.drop(columns=["domicilio"])
+        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+        st.dataframe(t3_ui, use_container_width=True)
+
+        t3_exp = t3_ag.rename(columns={
+            "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+        })
+
+        col_dp3, _ = st.columns([1, 2])
+        with col_dp3.expander("📥 Exportar Detalle Abierto (Registros)", expanded=False):
+            ed3_1, ed3_2 = st.columns(2)
+            fmt_dp3 = ed3_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp3")
+            mod_dp3 = ed3_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp3", horizontal=True)
+            if fmt_dp3 == "PDF":
+                btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3)
+                st.download_button("Descargar Reporte PDF  ", btn_dp3, "Detalle_Abierto.pdf", "application/pdf")
+            else:
+                btn_xdp3 = generar_excel_corporativo(t3_exp, fmt_dp3.lower())
+                st.download_button(f"Descargar Archivo {fmt_dp3}  ", btn_xdp3, f"Detalle_Abierto.{fmt_dp3.lower()}")
+
+    else:
+        st.warning("⚠️ No se encontraron registros para los filtros seleccionados.")
+
 # --- TAB EXTRA: GESTIÓN DE PERSONAL (ADMIN RBAC) ---
 if app_page == "👥 GESTIÓN DE PERSONAL":
     st.markdown("<h2 style='color:#ffffff'>👥 Panel de Control de Administradores</h2>", unsafe_allow_html=True)
@@ -1460,6 +1582,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
             p_ine = st.checkbox("📈 INERCIA TEMPORAL")
             p_mer = st.checkbox("🍩 PODER DE MERCADO")
             p_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO")
+            p_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS")
             p_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)")
             p_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA")
             
@@ -1479,6 +1602,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                             "inercia": "si" if p_ine else "no",
                             "mercado": "si" if p_mer else "no",
                             "copiloto": "si" if p_cop else "no",
+                            "datos": "si" if p_dat else "no",
                             "admin": "si" if p_adm else "no",
                             "can_config": "si" if p_cfg else "no"
                         }
@@ -1510,6 +1634,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                     e_ine = st.checkbox("📈 INERCIA TEMPORAL", value=(str(user_data.get('inercia', '')).lower() == 'si'))
                     e_mer = st.checkbox("🍩 PODER DE MERCADO", value=(str(user_data.get('mercado', '')).lower() == 'si'))
                     e_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
+                    e_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS", value=(str(user_data.get('datos', '')).lower() == 'si'))
                     e_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)", value=(str(user_data.get('admin', '')).lower() == 'si'))
                     e_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA", value=(str(user_data.get('can_config', '')).lower() == 'si'))
                     
@@ -1525,6 +1650,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                                 "inercia": "si" if e_ine else "no",
                                 "mercado": "si" if e_mer else "no",
                                 "copiloto": "si" if e_cop else "no",
+                                "datos": "si" if e_dat else "no",
                                 "admin": "si" if e_adm else "no",
                                 "can_config": "si" if e_cfg else "no"
                             }).eq("id", user_data['id']).execute()
