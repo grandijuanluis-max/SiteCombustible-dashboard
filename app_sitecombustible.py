@@ -116,9 +116,10 @@ def render_brand_title():
     logo = SYS_CONF.get("logo_url", "⛽")
     
     if str(logo).startswith("http") or str(logo).startswith("data:image"):
-        logo_html = f"<img src='{logo}' style='height: 3.5rem; vertical-align: middle; margin-right: 15px; border-radius: 8px;' />"
+        # Aumentamos el tamaño a 6.0rem (casi el doble) y lo alineamos para que no rompa el título
+        logo_html = f"<img src='{logo}' style='height: 6.0rem; vertical-align: middle; margin-top: -10px; margin-right: 25px; border-radius: 8px;' />"
     else:
-        logo_html = f"<span style='vertical-align: middle;'>{logo}</span>"
+        logo_html = f"<span style='vertical-align: middle; font-size: 4rem;'>{logo}</span>"
         
     main_title = f"<h1 style='text-align: center; font-size: 3.5rem; color: #ffffff;'>{logo_html} SiteCombustible {nombre}</h1>"
     return main_title
@@ -1316,8 +1317,16 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         st.markdown("---")
         st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
         if 'condicion' in dff.columns:
+            # Fallback de retro-compatibilidad ultrarrápido (soporte para archivos históricos sin nom_condi)
+            if 'nom_condi' in dff.columns:
+                dff['lbl_condicion'] = dff['nom_condi'].astype(str).str.strip()
+                mask_invalido = dff['lbl_condicion'].isin(['S/D', 'None', 'nan', '', 'null'])
+                dff.loc[mask_invalido, 'lbl_condicion'] = dff.loc[mask_invalido, 'condicion']
+            else:
+                dff['lbl_condicion'] = dff['condicion']
+
             # Primero ordenamos por Capital Comprometido (ventas) para extraer el Top 10 real
-            ag_cond = dff.groupby(['condicion']).agg(
+            ag_cond = dff.groupby(['lbl_condicion']).agg(
                 volumen=("volumen", "sum"),
                 ventas=("venta_total", "sum")
             ).reset_index().sort_values('ventas', ascending=False)
@@ -1330,9 +1339,9 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
                 ag_cond = ag_cond.head(10)
                 
             fig_cond = px.bar(
-                ag_cond, x='condicion', y='ventas', color='condicion',
+                ag_cond, x='lbl_condicion', y='ventas', color='lbl_condicion',
                 template="plotly_dark", 
-                labels={'condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
+                labels={'lbl_condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
                 text_auto='.3s'
             )
             fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')

@@ -25,8 +25,10 @@ except Exception as e:
     print(f"⚠️ Error fatal leyendo la bóveda secreta base: {e}")
     SECRETS = {}
 
-SUPABASE_URL = SECRETS.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
-SUPABASE_KEY = SECRETS.get("SUPABASE_KEY", "CLAVE_OCULTA")
+# Soportar tanto formato plano como formato anidado bajo [default]
+def_sec = SECRETS.get("default", {})
+SUPABASE_URL = SECRETS.get("SUPABASE_URL", def_sec.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co"))
+SUPABASE_KEY = SECRETS.get("SUPABASE_KEY", def_sec.get("SUPABASE_KEY", "CLAVE_OCULTA"))
 
 print("🔌 Conectando a Supabase (Bóveda Central)...")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -108,7 +110,7 @@ def procesar_archivos():
 
             # Columnas Requeridas de Textos
             text_cols = [
-                'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'codigocom', 
+                'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'nom_condi', 'codigocom', 
                 'nombre', 'localidad', 'provincia', 'canal', 'categoria', 'canal_com', 'cod_activ', 'cod_canal', 
                 'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 'tipo_comb', 'subti_comb', 
                 'domicilio', 'c_postal', 'proveedor', 'bandera'
@@ -171,7 +173,7 @@ def procesar_archivos():
     # Preparamos el Payload para la base de datos (Solo las columnas que existen en Supabase)
     cols_validas = [
         'id_unique', 'fecha_dt', 'anio', 'mes', 'precio', 'volumen', 'venta_total',
-        'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'codigocom', 
+        'numero', 'codigo', 'detalle', 'formulario', 'fecha', 'cliente', 'condicion', 'nom_condi', 'codigocom', 
         'nombre', 'localidad', 'provincia', 'canal', 'categoria', 'canal_com', 'cod_activ', 'cod_canal', 
         'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 'tipo_comb', 'subti_comb', 
         'domicilio', 'c_postal', 'proveedor', 'bandera'
