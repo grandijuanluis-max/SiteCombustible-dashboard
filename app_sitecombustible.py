@@ -356,7 +356,7 @@ def get_gsheet_client():
 
 from supabase import create_client, Client
 
-@st.cache_data(show_spinner="Descargando Bóveda Central (Supabase)...")
+@st.cache_data(ttl=300, show_spinner="Descargando Bóveda Central (Supabase)...")
 def load_data():
     try:
         # Usar secrets de Streamlit si existen, sino usar las claves directamente
