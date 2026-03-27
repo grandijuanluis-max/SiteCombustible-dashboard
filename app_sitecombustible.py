@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from folium.plugins import HeatMap
-from streamlit_folium import folium_static, st_folium
+from streamlit_folium import st_folium
 import plotly.express as px
 import plotly.graph_objects as go
 import os
@@ -15,6 +15,7 @@ from google.oauth2.service_account import Credentials
 from geopy.geocoders import Nominatim
 from fpdf import FPDF
 from datetime import datetime, date, timedelta
+import ast # Added for potential literal_eval if needed, assuming 'astic' was a typo
 
 # ==========================================
 # 📑 MOTOR DE EXPORTACIÓN CORPORATIVA (HELPER FUNCTIONS)
@@ -109,8 +110,20 @@ def load_sys_config():
         "drive_origen": "", "drive_destino": ""
     }
 
-SYS_CONF = load_sys_config()
+SYS_CONF = load_sys_config() or {}
 
+try:
+    raw_tab = SYS_CONF.get("tableros_activos", {})
+    if isinstance(raw_tab, str):
+        TABLEROS = json.loads(raw_tab) if raw_tab else {}
+    elif isinstance(raw_tab, dict):
+        TABLEROS = raw_tab
+    else:
+        TABLEROS = {}
+except:
+    TABLEROS = {}
+
+# Configuración Visual General de la Ventanas
 def render_brand_title():
     nombre = SYS_CONF.get("empresa_nombre", "Neural Hub")
     logo = SYS_CONF.get("logo_url", "⛽")
@@ -821,7 +834,10 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
         k2.metric("Clientes Activos", cli_tot_global)
         k3.metric("Ventas Est. ($)", f"$ {dff['venta_total'].sum():,.0f}")
         
-        st.subheader("📍 Concentración Geográfica (Mapa de Sensibilidad)")
+        if TABLEROS.get("vis_mapa", True):
+            st.subheader("📍 Concentración Geográfica (Mapa de Sensibilidad)")
+        
+        # Siempre calculamos ag_map porque la grilla también lo usa
         ag_map = dff.groupby(["localidad", "provincia"]).agg(vol=("volumen", "sum"), cli=("nombre", "nunique")).reset_index()
         def calc_score(r):
             s = ((r['vol'] / vol_tot_global) * 70) + ((r['cli'] / cli_tot_global) * 30)
@@ -830,7 +846,6 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
         calc = ag_map.apply(calc_score, axis=1)
         ag_map['Score'], ag_map['Nivel'] = calc.apply(lambda x: x[0]), calc.apply(lambda x: x[1])
 
-        import time
         import time
         # Diccionario In-Memory para velocidad extrema (TOP Localidades de Argentina)
         CACHE_DIRECTO_ARG = {
@@ -869,44 +884,46 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
             except: pass
             return None
 
-        # Expander a lo ancho de TODA la pantalla
-        with st.expander("🗺️ Ver Mapa de Calor Geográfico (Motor Ultra-Rápido)", expanded=False):
-            st.info("💡 Renderizado acelerado por inyección en Memoria Caché de RAM (Latencia esperada: 0.05 segundos).")
-            if st.button("🚀 Renderizar Mapa Avanzado", key="btn_render_mapa"):
-                with st.spinner("Levantando plano interactivo responsivo..."):
-                    
-                    top_locs = ag_map.sort_values("vol", ascending=False).head(35)
-                    
-                    m = folium.Map(location=[-35.4, -63.6], zoom_start=5, tiles='cartodbdark_matter')
-                    m_data = []
-                    
-                    for _, r in top_locs.iterrows():
-                        coords = geocode_cached(r['localidad'], r['provincia'])
-                        if coords:
-                            lat, lon, score = coords['lat'], coords['lon'], r['Score']
-                            m_data.append([lat, lon, score])
-                            
-                            color_mk = "#ef4444" if score >= 5.0 else ("#eab308" if score >= 1.5 else "#3b82f6")
-                            folium.CircleMarker(
-                                location=[lat, lon],
-                                radius=max(4, min(score * 2.5, 18)),
-                                popup=f"<div style='min-width: 150px'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Total: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b></div>",
-                                tooltip=f"{r['localidad']}",
-                                color=color_mk,
-                                fill=True,
-                                fill_color=color_mk,
-                                fill_opacity=0.8,
-                                weight=1
-                            ).add_to(m)
-                            
-                    if m_data: 
-                        HeatMap(m_data, radius=35, blur=25, min_opacity=0.4, gradient={0.2: '#0ea5e9', 0.6: '#eab308', 1.0: '#ef4444'}).add_to(m) 
-                    
-                    st_folium(m, use_container_width=True, height=550, returned_objects=[])
+        if TABLEROS.get("vis_mapa", True):
+            # Expander a lo ancho de TODA la pantalla
+            with st.expander("🗺️ Ver Mapa de Calor Geográfico (Motor Ultra-Rápido)", expanded=False):
+                st.info("💡 Renderizado acelerado por inyección en Memoria Caché de RAM (Latencia esperada: 0.05 segundos).")
+                if st.button("🚀 Renderizar Mapa Avanzado", key="btn_render_mapa"):
+                    with st.spinner("Levantando plano interactivo responsivo..."):
+                        
+                        top_locs = ag_map.sort_values("vol", ascending=False).head(35)
+                        
+                        m = folium.Map(location=[-35.4, -63.6], zoom_start=5, tiles='cartodbdark_matter')
+                        m_data = []
+                        
+                        for _, r in top_locs.iterrows():
+                            coords = geocode_cached(r['localidad'], r['provincia'])
+                            if coords:
+                                lat, lon, score = coords['lat'], coords['lon'], r['Score']
+                                m_data.append([lat, lon, score])
+                                
+                                color_mk = "#ef4444" if score >= 5.0 else ("#eab308" if score >= 1.5 else "#3b82f6")
+                                folium.CircleMarker(
+                                    location=[lat, lon],
+                                    radius=max(4, min(score * 2.5, 18)),
+                                    popup=f"<div style='min-width: 150px'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Total: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b></div>",
+                                    tooltip=f"{r['localidad']}",
+                                    color=color_mk,
+                                    fill=True,
+                                    fill_color=color_mk,
+                                    fill_opacity=0.8,
+                                    weight=1
+                                ).add_to(m)
+                                
+                        if m_data: 
+                            HeatMap(m_data, radius=35, blur=25, min_opacity=0.4, gradient={0.2: '#0ea5e9', 0.6: '#eab308', 1.0: '#ef4444'}).add_to(m) 
+                        
+                        st_folium(m, use_container_width=True, height=550, returned_objects=[])
         
-        st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
-        grid = ag_map.sort_values("Score", ascending=False)
-        st.dataframe(grid.style.applymap(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
+        if TABLEROS.get("vis_grilla", True):
+            st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
+            grid = ag_map.sort_values("Score", ascending=False)
+            st.dataframe(grid.style.applymap(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
 
         col_exp_grid, _ = st.columns([1, 2])
         with col_exp_grid.expander("📥 Exportar Grilla Estratégica", expanded=False):
@@ -999,14 +1016,15 @@ if app_page == "📈 INERCIA TEMPORAL":
             
         e_vol_total = e_vol_total.sort_values("sort_key")
 
-        # Gráfico con estética refinada y fondo holográfico
-        fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
-        fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
-        fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
-                           paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig1.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig1, use_container_width=True)
+        if TABLEROS.get("i_inercia", True):
+            st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
+            fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
+            fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
+            fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
+                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig1.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig1, use_container_width=True)
 
         # Exportación Sutil (Expander)
         col_exp1, _ = st.columns([1, 2])
@@ -1041,14 +1059,14 @@ if app_page == "📈 INERCIA TEMPORAL":
             
         e_sub = e_sub.sort_values("sort_key")
 
-        fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje, 'subti_comb': 'Combustible'})
-        fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
-                           paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        # Conservamos el orden cronológico estricto ocultando el datetime
-        cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
-        fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig2.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig2, use_container_width=True)
+        if TABLEROS.get("i_inercia", True):
+            fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje, 'subti_comb': 'Combustible'})
+            fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
+                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
+            fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig2.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig2, use_container_width=True)
 
         col_exp2, _ = st.columns([1, 2])
         with col_exp2.expander("📥 Exportar Reporte de Productos", expanded=False):
@@ -1065,17 +1083,17 @@ if app_page == "📈 INERCIA TEMPORAL":
 
         st.markdown("---")
 
-        # --- RANKING PROVINCIAL ---
-        st.markdown("#### 3. Dominancia por Zona (Ranking Volumen)")
-        r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
-            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
-        ).reset_index()
-        
-        fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
-        fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig_prov.update_layout(margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig_prov, use_container_width=True)
+        if TABLEROS.get("i_dom", True):
+            st.markdown("#### 3. Dominancia por Zona (Ranking Volumen)")
+            r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
+            ).reset_index()
+            
+            fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
+            fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_prov.update_layout(margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_prov, use_container_width=True)
         
         col_exp_prov, _ = st.columns([1, 2])
         with col_exp_prov.expander("📥 Exportar Reporte de Zona", expanded=False):
@@ -1107,23 +1125,24 @@ if app_page == "🍩 PODER DE MERCADO":
         txt_filtros_t3 = f"Fechas: {str_fechas} | Prov: {sel_prov or 'Todas'} | Sub: {sel_sub or 'Todos'}"
 
         # --- SECCIÓN 1: MIX POR PROVEEDOR (BARRA HORIZONTAL) ---
-        st.markdown("#### 1. Concentración de Volumen por Proveedor")
-        # El mayor volumen siempre arriba para lectura rápida
-        fig_prov_2 = px.bar(
-            prov_mix, 
-            y='proveedor', 
-            x='volumen', 
-            color='subti_comb', 
-            orientation='h', 
-            template="plotly_dark",
-            labels={'proveedor': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
-        )
-        # Ordenamos: Mayor volumen ARRIBA de todo
-        fig_prov_2.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
-        fig_prov_2.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
-                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        fig_prov_2.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig_prov_2, use_container_width=True)
+        if TABLEROS.get("m_prov", True):
+            st.markdown("#### 1. Concentración de Volumen por Proveedor")
+            # El mayor volumen siempre arriba para lectura rápida
+            fig_prov_2 = px.bar(
+                prov_mix, 
+                y='proveedor', 
+                x='volumen', 
+                color='subti_comb', 
+                orientation='h', 
+                template="plotly_dark",
+                labels={'proveedor': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
+            )
+            # Ordenamos: Mayor volumen ARRIBA de todo
+            fig_prov_2.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+            fig_prov_2.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
+                                   paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            fig_prov_2.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_prov_2, use_container_width=True)
 
         # BLOQUE DE EXPORTACIÓN SUTIL (Expander)
         col_exp3, _ = st.columns([1, 2])
@@ -1143,39 +1162,40 @@ if app_page == "🍩 PODER DE MERCADO":
         st.markdown("---")
 
         # --- SECCIÓN 2: PARTICIPACIÓN GLOBAL (DONA) ---
-        st.markdown("#### 2. Participación por Tipo de Producto")
-        
-        # Agrupamos solo por subtipo para el gráfico de torta
+        # Agrupamos solo por subtipo para el gráfico de torta (fuera del if para no romper la exportación)
         mix_global = dff.groupby('subti_comb').agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
 
-        fig_pie = px.pie(
-            mix_global, 
-            values='volumen', 
-            names='subti_comb', 
-            hole=0.5,
-            template="plotly_dark",
-            labels={'subti_comb': 'Combustible', 'volumen': 'Lts'},
-            color_discrete_sequence=px.colors.qualitative.Prism
-        )
-        fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
-        fig_pie.update_layout(height=450, margin=dict(t=30, b=30), legend=dict(font=dict(color='#ffffff', size=13), title=dict(text='Combustible', font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
-        st.plotly_chart(fig_pie, use_container_width=True)
+        if TABLEROS.get("m_part", True):
+            st.markdown("#### 2. Participación por Tipo de Producto")
+            fig_pie = px.pie(
+                mix_global, 
+                values='volumen', 
+                names='subti_comb', 
+                hole=0.5,
+                template="plotly_dark",
+                labels={'subti_comb': 'Combustible', 'volumen': 'Lts'},
+                color_discrete_sequence=px.colors.qualitative.Prism
+            )
+            fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
+            fig_pie.update_layout(height=450, margin=dict(t=30, b=30), legend=dict(font=dict(color='#ffffff', size=13), title=dict(text='Combustible', font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
+            st.plotly_chart(fig_pie, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("#### 3. Batalla por el Dominio Territorial (Share de Banderas)")
-        if 'bandera' in dff.columns:
-            ag_bandera = dff.groupby(['bandera', 'subti_comb']).agg(volumen=("volumen", "sum")).reset_index()
-            fig_bandera = px.bar(
-                ag_bandera, y='bandera', x='volumen', color='subti_comb',
-                orientation='h', template="plotly_dark",
-                labels={'bandera': 'Marca / Bandera', 'volumen': 'Litros'}
-            )
-            fig_bandera.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
-            fig_bandera.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-            fig_bandera.update_layout(height=450, margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1))
-            st.plotly_chart(fig_bandera, use_container_width=True)
+        if TABLEROS.get("m_terr", True):
+            st.markdown("#### 3. Batalla por el Dominio Territorial (Share de Banderas)")
+            if 'bandera' in dff.columns:
+                ag_bandera = dff.groupby(['bandera', 'subti_comb']).agg(volumen=("volumen", "sum")).reset_index()
+                fig_bandera = px.bar(
+                    ag_bandera, y='bandera', x='volumen', color='subti_comb',
+                    orientation='h', template="plotly_dark",
+                    labels={'bandera': 'Marca / Bandera', 'volumen': 'Litros'}
+                )
+                fig_bandera.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+                fig_bandera.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+                fig_bandera.update_layout(height=450, margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1))
+                st.plotly_chart(fig_bandera, use_container_width=True)
 
         # Exportación sutil para el Mix Global
         col_exp4, _ = st.columns([1, 2])
@@ -1222,188 +1242,188 @@ if app_page == "🧠 COPILOTO ESTRATÉGICO":
         variacion = ((v_actual - v_anterior) / v_anterior) * 100 if v_anterior > 0 else 0
         
         if v_actual > 0 or v_anterior > 0:
-            # ======= EL "VELOCÍMETRO" (GAUGE CHART) =======
-            st.markdown("#### 🏎️ Tacómetro de Velocidad Comercial")
-            c_gauge, c_txt = st.columns([1.5, 1])
-            
-            with c_gauge:
-                fig_gauge = go.Figure(go.Indicator(
-                    mode = "gauge+number+delta",
-                    value = v_actual,
-                    domain = {'x': [0, 1], 'y': [0, 1]},
-                    title = {'text': f"Litros Vendidos ({periodo_act})", 'font': {'size': 20, 'color': 'white'}},
-                    delta = {'reference': v_anterior, 'valueformat': ',.0f', 'position': "top", 'increasing': {'color': '#22c55e'}, 'decreasing': {'color': '#ef4444'}},
-                    number = {'valueformat': ',.0f', 'font': {'color': 'white'}},
-                    gauge = {
-                        'axis': {'range': [None, max(v_actual, v_anterior) * 1.5], 'tickwidth': 1, 'tickcolor': "white"},
-                        'bar': {'color': "#3b82f6", 'thickness': 0.25},
-                        'bgcolor': "rgba(0,0,0,0)",
-                        'borderwidth': 2,
-                        'bordercolor': "gray",
-                        'steps': [
-                            {'range': [0, v_anterior * 0.8], 'color': 'rgba(239, 68, 68, 0.4)'}, # Zona Roja
-                            {'range': [v_anterior * 0.8, v_anterior * 1.05], 'color': 'rgba(234, 179, 8, 0.4)'}, # Zona Amarilla
-                            {'range': [v_anterior * 1.05, max(v_actual, v_anterior) * 1.5], 'color': 'rgba(34, 197, 94, 0.4)'} # Zona Verde
-                        ],
-                        'threshold': {
-                            'line': {'color': "white", 'width': 4},
-                            'thickness': 0.75,
-                            'value': v_anterior
+            if TABLEROS.get("c_vel", True):
+                # ======= EL "VELOCÍMETRO" (GAUGE CHART) =======
+                st.markdown("#### 🏎️ Tacómetro de Velocidad Comercial")
+                c_gauge, c_txt = st.columns([1.5, 1])
+                
+                with c_gauge:
+                    fig_gauge = go.Figure(go.Indicator(
+                        mode = "gauge+number+delta",
+                        value = v_actual,
+                        domain = {'x': [0, 1], 'y': [0, 1]},
+                        title = {'text': f"Litros Vendidos ({periodo_act})", 'font': {'size': 20, 'color': 'white'}},
+                        delta = {'reference': v_anterior, 'valueformat': ',.0f', 'position': "top", 'increasing': {'color': '#22c55e'}, 'decreasing': {'color': '#ef4444'}},
+                        number = {'valueformat': ',.0f', 'font': {'color': 'white'}},
+                        gauge = {
+                            'axis': {'range': [None, max(v_actual, v_anterior) * 1.5], 'tickwidth': 1, 'tickcolor': "white"},
+                            'bar': {'color': "#3b82f6", 'thickness': 0.25},
+                            'bgcolor': "rgba(0,0,0,0)",
+                            'borderwidth': 2,
+                            'bordercolor': "gray",
+                            'steps': [
+                                {'range': [0, v_anterior * 0.8], 'color': 'rgba(239, 68, 68, 0.4)'}, # Zona Roja
+                                {'range': [v_anterior * 0.8, v_anterior * 1.05], 'color': 'rgba(234, 179, 8, 0.4)'}, # Zona Amarilla
+                                {'range': [v_anterior * 1.05, max(v_actual, v_anterior) * 1.5], 'color': 'rgba(34, 197, 94, 0.4)'} # Zona Verde
+                            ],
+                            'threshold': {
+                                'line': {'color': "white", 'width': 4},
+                                'thickness': 0.75,
+                                'value': v_anterior
+                            }
                         }
-                    }
-                ))
-                fig_gauge.update_layout(height=350, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color': "white"})
-                st.plotly_chart(fig_gauge, use_container_width=True)
-
-            with c_txt:
-                st.info(f"**Interpretación Gerencial:** Mide tu rendimiento en bloque. Hoy estás **{abs(variacion):.2f}%** {'arriba' if variacion >=0 else 'abajo'} respecto a idéntico período previo ({txt_ref}).")
-                if variacion > 5:
-                    st.success("🚀 **Motor a tope:** El sector está ganando inercia con fuerza. ¡Asegurar stock suficiente!")
-                elif variacion >= -5:
-                    st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de distribución estable.")
-                else:
-                    st.error("📉 **Alerta Desaceleración:** Caída prolongada de litros en las Mangueras. Sugerencia de inyectar crédito o promociones.")
+                    ))
+                    fig_gauge.update_layout(height=350, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color': "white"})
+                    st.plotly_chart(fig_gauge, use_container_width=True)
+    
+                with c_txt:
+                    st.info(f"**Interpretación Gerencial:** Mide tu rendimiento en bloque. Hoy estás **{abs(variacion):.2f}%** {'arriba' if variacion >=0 else 'abajo'} respecto a idéntico período previo ({txt_ref}).")
+                    if variacion > 5:
+                        st.success("🚀 **Motor a tope:** El sector está ganando inercia con fuerza. ¡Asegurar stock suficiente!")
+                    elif variacion >= -5:
+                        st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de distribución estable.")
+                    else:
+                        st.error("📉 **Alerta Desaceleración:** Caída prolongada de litros en las Mangueras. Sugerencia de inyectar crédito o promociones.")
 
         st.markdown("---")
 
-        # 2. Alertas de Riesgo Hugo Rodano (Concentración Crítica)
-        st.subheader("⚠️ Alertas de Fuga & Concentración")
-        
-        # --- AQUÍ ESTABA EL ERROR (CORREGIDO CON aggfunc=) ---
+        # 2. Alertas de Riesgo Hugo Rodano (Concentración Crítica)  [Se calcula siempre para exports/Score]
         ag_riesgo = dff.groupby(["localidad", "provincia"]).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             clientes=pd.NamedAgg(column="nombre", aggfunc="nunique") # <-- CORREGIDO
         ).reset_index()
-        
-        # Umbral: Más del promedio de volumen pero con menos de 3 clientes (Dependencia peligrosa)
-        vol_promedio = ag_riesgo['volumen'].mean() if not ag_riesgo.empty else 0
-        riesgo_critico = ag_riesgo[(ag_riesgo['volumen'] > vol_promedio) & (ag_riesgo['clientes'] <= 2)]
-        
-        if not riesgo_critico.empty:
-            st.error(f"Se detectaron {len(riesgo_critico)} zonas con Riesgo de Fuga por alta concentración.")
+
+        if TABLEROS.get("c_aler", True):
+            st.subheader("⚠️ Alertas de Fuga & Concentración")
             
-            # Limpiamos, ordenamos y traducimos los títulos
-            show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
-            show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
+            # Umbral: Más del promedio de volumen pero con menos de 3 clientes (Dependencia peligrosa)
+            vol_promedio = ag_riesgo['volumen'].mean() if not ag_riesgo.empty else 0
+            riesgo_critico = ag_riesgo[(ag_riesgo['volumen'] > vol_promedio) & (ag_riesgo['clientes'] <= 2)]
             
-            # Formateamos los números para que no muestre 3826.000000
-            show_df['VOLUMEN (LTS)'] = show_df['VOLUMEN (LTS)'].apply(lambda x: f"{x:,.0f}")
-            
-            # Estilos exactos: Fondo blanco y texto negro para las celdas (la grilla). Fondo azul y texto blanco para los títulos.
-            sty_df = show_df.style.set_properties(**{
-                'background-color': 'white', 
-                'color': 'black'
-            }).set_table_styles([{
-                'selector': 'th', 
-                'props': [('background-color', '#2563eb !important'), ('color', 'white !important')]
-            }])
-            
-            # Usamos st.dataframe para que vuelva a ser scrollable (la grilla interactiva)
-            st.dataframe(sty_df, use_container_width=True)
-            
-            # Exportación Sutil de Alertas
-            with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
-                col_r1, col_r2 = st.columns(2)
-                fmt_r = col_r1.selectbox("Formato", ["PDF", "XLSX"], key="fmt_riesgo_vfinal")
-                if fmt_r == "PDF":
-                    btn_r = generar_pdf_corporativo(riesgo_critico, "Alertas de Riesgo por Concentracion", "Filtros Activos", "Solo Datos")
-                    st.download_button("Descargar Reporte de Riesgos", btn_r, "Alertas_Riesgo.pdf", "application/pdf")
+            if not riesgo_critico.empty:
+                st.error(f"Se detectaron {len(riesgo_critico)} zonas con Riesgo de Fuga por alta concentración.")
+                
+                # Limpiamos, ordenamos y traducimos los títulos
+                show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
+                show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
+                
+                # Formateamos los números para que no muestre 3826.000000
+                show_df['VOLUMEN (LTS)'] = show_df['VOLUMEN (LTS)'].apply(lambda x: f"{x:,.0f}")
+                
+                # Estilos exactos
+                sty_df = show_df.style.set_properties(**{
+                    'background-color': 'white', 
+                    'color': 'black'
+                }).set_table_styles([{
+                    'selector': 'th', 
+                    'props': [('background-color', '#2563eb !important'), ('color', 'white !important')]
+                }])
+                
+                # Usamos st.dataframe para que vuelva a ser scrollable (la grilla interactiva)
+                st.dataframe(sty_df, use_container_width=True)
+                
+                # Exportación Sutil de Alertas
+                with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
+                    col_r1, col_r2 = st.columns(2)
+                    fmt_r = col_r1.selectbox("Formato", ["PDF", "XLSX"], key="fmt_riesgo_vfinal")
+                    if fmt_r == "PDF":
+                        btn_r = generar_pdf_corporativo(riesgo_critico, "Alertas de Riesgo por Concentracion", "Filtros Activos", "Solo Datos")
+                        st.download_button("Descargar Reporte de Riesgos", btn_r, "Alertas_Riesgo.pdf", "application/pdf")
+                    else:
+                        btn_rx = generar_excel_corporativo(riesgo_critico, "xlsx")
+                        st.download_button("Descargar Excel de Riesgos", btn_rx, "Alertas_Riesgo.xlsx")
+            else:
+                st.success("✅ No se detectan zonas con concentración crítica de clientes en el filtro actual.")
+
+        st.markdown("---")
+        if TABLEROS.get("c_matriz", True):
+            st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
+            if 'condicion' in dff.columns:
+                # Fallback de retro-compatibilidad ultrarrápido (soporte para archivos históricos sin nom_condi)
+                if 'nom_condi' in dff.columns:
+                    dff['lbl_condicion'] = dff['nom_condi'].astype(str).str.strip()
+                    mask_invalido = dff['lbl_condicion'].isin(['S/D', 'None', 'nan', '', 'null'])
+                    dff.loc[mask_invalido, 'lbl_condicion'] = dff.loc[mask_invalido, 'condicion']
                 else:
-                    btn_rx = generar_excel_corporativo(riesgo_critico, "xlsx")
-                    st.download_button("Descargar Excel de Riesgos", btn_rx, "Alertas_Riesgo.xlsx")
-        else:
-            st.success("✅ No se detectan zonas con concentración crítica de clientes en el filtro actual.")
-
-        st.markdown("---")
-        st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
-        if 'condicion' in dff.columns:
-            # Fallback de retro-compatibilidad ultrarrápido (soporte para archivos históricos sin nom_condi)
-            if 'nom_condi' in dff.columns:
-                dff['lbl_condicion'] = dff['nom_condi'].astype(str).str.strip()
-                mask_invalido = dff['lbl_condicion'].isin(['S/D', 'None', 'nan', '', 'null'])
-                dff.loc[mask_invalido, 'lbl_condicion'] = dff.loc[mask_invalido, 'condicion']
-            else:
-                dff['lbl_condicion'] = dff['condicion']
-
-            # Primero ordenamos por Capital Comprometido (ventas) para extraer el Top 10 real
-            ag_cond = dff.groupby(['lbl_condicion']).agg(
-                volumen=("volumen", "sum"),
-                ventas=("venta_total", "sum")
-            ).reset_index().sort_values('ventas', ascending=False)
-            
-            # CSS para forzar el título del toggle a color BLANCO
-            st.markdown('<style>div[data-testid="stToggle"] p {color: white !important; font-weight: 500;}</style>', unsafe_allow_html=True)
-            
-            mostrar_todas = st.toggle("Mostrar Top 10 -> Cargar Todas las Condiciones", value=False)
-            if not mostrar_todas:
-                ag_cond = ag_cond.head(10)
+                    dff['lbl_condicion'] = dff['condicion']
+    
+                # Primero ordenamos por Capital Comprometido (ventas) para extraer el Top 10 real
+                ag_cond = dff.groupby(['lbl_condicion']).agg(
+                    volumen=("volumen", "sum"),
+                    ventas=("venta_total", "sum")
+                ).reset_index().sort_values('ventas', ascending=False)
                 
-            fig_cond = px.bar(
-                ag_cond, x='lbl_condicion', y='ventas', color='lbl_condicion',
-                template="plotly_dark", 
-                labels={'lbl_condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
-                text_auto='.3s'
-            )
-            fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
-            # Ordenamos la gráfica de izquierda a derecha (ascendente)
-            fig_cond.update_xaxes(categoryorder='total ascending', tickfont=dict(color='white'))
-            fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
-            st.plotly_chart(fig_cond, use_container_width=True)
-
-        st.markdown("---")
-
-        # 3. Ranking Estratégico de Score (Top 20)
-        st.subheader("🧠 Ranking de Relevancia Estratégica ($Score$)")
-        v_gl = dff['volumen'].sum() if not dff.empty else 1
-        c_gl = dff['nombre'].nunique() if not dff.empty else 1
-        
-        # Cálculo de Score dinámico
-        ag_riesgo['Score'] = ((ag_riesgo['volumen'] / v_gl) * 70) + ((ag_riesgo['clientes'] / c_gl) * 30)
-        top_20 = ag_riesgo.sort_values("Score", ascending=False).head(20)
-
-        fig_score = px.bar(
-            top_20, 
-            x='Score', 
-            y='localidad', 
-            color='Score', 
-            orientation='h',
-            title="Top 20 Localidades por Potencial de Mercado",
-            color_continuous_scale='RdYlGn',
-            template="plotly_dark"
-        )
-        fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12)) # El más alto arriba
-        fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
-        fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
-        st.plotly_chart(fig_score, use_container_width=True)
-
-        # Exportación Sutil del Ranking
-        with st.expander("📥 Exportar Ranking de Score", expanded=False):
-            sc1, sc2 = st.columns(2)
-            fmt_sc = sc1.selectbox("Formato ", ["PDF", "XLSX"], key="fmt_score_t4_vfinal")
-            if fmt_sc == "PDF":
-                btn_sc = generar_pdf_corporativo(top_20, "Ranking Estrategico de Score", "Top 20 Localidades", "Completo")
-                st.download_button("Descargar Reporte de Score", btn_sc, "Ranking_Score.pdf", "application/pdf")
-            else:
-                btn_scx = generar_excel_corporativo(top_20, "xlsx")
-                st.download_button("Descargar Excel de Score", btn_scx, "Ranking_Score.xlsx")
+                # CSS para forzar el título del toggle a color BLANCO
+                st.markdown('<style>div[data-testid="stToggle"] p {color: white !important; font-weight: 500;}</style>', unsafe_allow_html=True)
                 
-        st.markdown("---")
-        st.subheader("🌲 Radiografía Sectorial (ADN del Cliente)")
-        st.info("🧬 **Análisis de Impacto Productivo:** Este modelo circular mapea de qué industrias exactas depende tu facturación. El círculo central verde oscuro agrupa las áreas macro (ej. AGRO, TRANSPORTE), y al hacer click en él se despliegan los anillos exteriores que contienen los sub-rubros específicos. Te permite identificar instantáneamente el ADN comercial de tu negocio y dónde está apoyado el mayor volumen.")
-        if 'rubro' in dff.columns and 'subrubro' in dff.columns:
-            ag_rubro = dff.groupby(['rubro', 'subrubro']).agg(volumen=("volumen", "sum")).reset_index()
-            # Limpiamos los S/D masivos si nublan el gráfico
-            ag_rubro = ag_rubro[ag_rubro['rubro'] != "S/D"]
-            if not ag_rubro.empty:
-                fig_sun = px.sunburst(
-                    ag_rubro, path=['rubro', 'subrubro'], values='volumen',
-                    color='volumen', color_continuous_scale='Blues',
-                    template="plotly_dark"
+                mostrar_todas = st.toggle("Mostrar Top 10 -> Cargar Todas las Condiciones", value=False)
+                if not mostrar_todas:
+                    ag_cond = ag_cond.head(10)
+                    
+                fig_cond = px.bar(
+                    ag_cond, x='lbl_condicion', y='ventas', color='lbl_condicion',
+                    template="plotly_dark", 
+                    labels={'lbl_condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
+                    text_auto='.3s'
                 )
-                fig_sun.update_layout(margin=dict(t=20, l=0, r=0, b=0), height=550, paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color':'white'})
-                st.plotly_chart(fig_sun, use_container_width=True)
-            else:
-                st.warning("No hay suficientes datos sectoriales ('Rubro') etiquetados en este Excel para trazar la Radiografía.")
+                fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
+                # Ordenamos la gráfica de izquierda a derecha (ascendente)
+                fig_cond.update_xaxes(categoryorder='total ascending', tickfont=dict(color='white'))
+                fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                st.plotly_chart(fig_cond, use_container_width=True)
+
+        st.markdown("---")
+        if TABLEROS.get("c_score", True):
+            st.subheader("🧠 Ranking de Relevancia Estratégica ($Score$)")
+            v_gl = dff['volumen'].sum() if not dff.empty else 1
+            c_gl = dff['nombre'].nunique() if not dff.empty else 1
+            
+            ag_riesgo['Score'] = ((ag_riesgo['volumen'] / v_gl) * 70) + ((ag_riesgo['clientes'] / c_gl) * 30)
+            top_20 = ag_riesgo.sort_values("Score", ascending=False).head(20)
+    
+            fig_score = px.bar(
+                top_20, 
+                x='Score', 
+                y='localidad', 
+                color='Score', 
+                orientation='h',
+                title="Top 20 Localidades por Potencial de Mercado",
+                color_continuous_scale='RdYlGn',
+                template="plotly_dark"
+            )
+            fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+            fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_score, use_container_width=True)
+    
+            with st.expander("📥 Exportar Ranking de Score", expanded=False):
+                sc1, sc2 = st.columns(2)
+                fmt_sc = sc1.selectbox("Formato ", ["PDF", "XLSX"], key="fmt_score_t4_vfinal")
+                if fmt_sc == "PDF":
+                    btn_sc = generar_pdf_corporativo(top_20, "Ranking Estrategico de Score", "Top 20 Localidades", "Completo")
+                    st.download_button("Descargar Reporte de Score", btn_sc, "Ranking_Score.pdf", "application/pdf")
+                else:
+                    btn_scx = generar_excel_corporativo(top_20, "xlsx")
+                    st.download_button("Descargar Excel de Score", btn_scx, "Ranking_Score.xlsx")
+
+        st.markdown("---")
+        if TABLEROS.get("c_adn", True):
+            st.subheader("🌲 Radiografía Sectorial (ADN del Cliente)")
+            st.info("🧬 **Análisis de Impacto Productivo:** Este modelo circular mapea de qué industrias exactas depende tu facturación. El círculo central verde oscuro agrupa las áreas macro (ej. AGRO, TRANSPORTE), y al hacer click en él se despliegan los anillos exteriores que contienen los sub-rubros específicos. Te permite identificar instantáneamente el ADN comercial de tu negocio y dónde está apoyado el mayor volumen.")
+            if 'rubro' in dff.columns and 'subrubro' in dff.columns:
+                ag_rubro = dff.groupby(['rubro', 'subrubro']).agg(volumen=("volumen", "sum")).reset_index()
+                # Limpiamos los S/D masivos si nublan el gráfico
+                ag_rubro = ag_rubro[ag_rubro['rubro'] != "S/D"]
+                if not ag_rubro.empty:
+                    fig_sun = px.sunburst(
+                        ag_rubro, path=['rubro', 'subrubro'], values='volumen',
+                        color='volumen', color_continuous_scale='Blues',
+                        template="plotly_dark"
+                    )
+                    fig_sun.update_layout(margin=dict(t=20, l=0, r=0, b=0), height=550, paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color':'white'})
+                    st.plotly_chart(fig_sun, use_container_width=True)
+                else:
+                    st.warning("No hay suficientes datos sectoriales ('Rubro') etiquetados en este Excel para trazar la Radiografía.")
     else:
         st.warning("⚠️ Sin datos para procesar en el Copiloto Estratégico.")
 
@@ -1561,7 +1581,7 @@ if app_page == "⚙️ CONFIGURACIÓN":
     st.markdown("## ⚙️ Configuración del Sistema")
     st.info("Estos ajustes alteran la interfaz gráfica pública y los parámetros del Robot Automático (Data Pipeline).")
     
-    t1, t2 = st.tabs(["🎨 Identidad de Empresa (Branding)", "🔌 Motor de Datos (Arquitectura ETL)"])
+    t1, t2, t3 = st.tabs(["🎨 Identidad de Empresa (Branding)", "🔌 Motor de Datos (Arquitectura ETL)", "🖥️ Tableros a Mostrar"]) # Forzando recompilación Streamlit
     
     with t1:
         with st.form("form_branding"):
@@ -1639,3 +1659,44 @@ if app_page == "⚙️ CONFIGURACIÓN":
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error cableando el Motor ETL: {e}")
+
+    with t3:
+        st.subheader("🖥️ Conmutador Global de Módulos Visuales")
+        st.info("💡 Al apagar un tablero, se ocultará instantáneamente para TODOS en la corporación. El diseño inteligente subirá los módulos inferiores para evitar dejar 'huecos' grises en la pantalla.")
+        with st.form("form_toggles"):
+            st.markdown("### 🏠 VISIÓN EJECUTIVA")
+            v_mapa = st.toggle("📍 Concentración Geográfica (Mapa de Sensibilidad)", value=TABLEROS.get("vis_mapa", True))
+            v_grilla = st.toggle("🚦 Grilla Estratégica (Análisis de Mercado)", value=TABLEROS.get("vis_grilla", True))
+            
+            st.markdown("### 📈 INERCIA TEMPORAL")
+            i_inercia = st.toggle("📊 Inercia Temporal de Despacho", value=TABLEROS.get("i_inercia", True))
+            i_dom = st.toggle("3. Dominancia por Zona (Ranking Volumen)", value=TABLEROS.get("i_dom", True))
+            
+            st.markdown("### 🍩 PODER DE MERCADO")
+            m_prov = st.toggle("🏭 Poder de Negociación por Proveedor", value=TABLEROS.get("m_prov", True))
+            m_part = st.toggle("2. Participación por Tipo de Producto (Dona)", value=TABLEROS.get("m_part", True))
+            m_terr = st.toggle("3. Batalla por el Dominio Territorial (Bandera)", value=TABLEROS.get("m_terr", True))
+            
+            st.markdown("### 🧠 COPILOTO ESTRATÉGICO")
+            c_vel = st.toggle("🏎️ Tacómetro de Velocidad Comercial", value=TABLEROS.get("c_vel", True))
+            c_aler = st.toggle("⚠️ Alertas de Fuga & Concentración", value=TABLEROS.get("c_aler", True))
+            c_matriz = st.toggle("💸 Matriz de Exposición Financiera", value=TABLEROS.get("c_matriz", True))
+            c_score = st.toggle("🧠 Ranking de Relevancia Estratégica ($Score$)", value=TABLEROS.get("c_score", True))
+            c_adn = st.toggle("🌲 Radiografía Sectorial (ADN del Cliente)", value=TABLEROS.get("c_adn", True))
+            
+            if st.form_submit_button("💾 Guardar y Aplicar Layout", type="primary", use_container_width=True):
+                try:
+                    sc = create_client(st.secrets.get("SUPABASE_URL"), st.secrets.get("SUPABASE_KEY"))
+                    nuevos_tableros = {
+                        "vis_mapa": v_mapa, "vis_grilla": v_grilla, "i_inercia": i_inercia, "i_dom": i_dom,
+                        "m_prov": m_prov, "m_part": m_part, "m_terr": m_terr,
+                        "c_vel": c_vel, "c_aler": c_aler, "c_matriz": c_matriz, "c_score": c_score, "c_adn": c_adn
+                    }
+                    # PostgreSQL/Supabase JSONb acepta el diccionario de Python directamente sin stringificar
+                    sc.table("configuracion").update({"tableros_activos": nuevos_tableros}).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success("¡Disposición de Tableros guardada impecablemente en Bóveda! Refrescando la UI...")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error grabando Toggles en DB: {e}. ¿Creaste la columna 'tableros_activos' en la tabla configuracion?")
