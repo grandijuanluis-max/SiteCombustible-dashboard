@@ -920,9 +920,9 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
                         
                         st_folium(m, use_container_width=True, height=550, returned_objects=[])
         
+        st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
+        grid = ag_map.sort_values("Score", ascending=False)
         if TABLEROS.get("vis_grilla", True):
-            st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
-            grid = ag_map.sort_values("Score", ascending=False)
             st.dataframe(grid.style.applymap(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
 
         col_exp_grid, _ = st.columns([1, 2])
@@ -1001,7 +1001,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         txt_filtros = f"Fechas: {str_fechas} | Localidad: {sel_loc or 'Todas'} | Subtipo: {sel_sub or 'Todos'}"
 
         # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg + Espinazo Cero) ---
-        st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
+        st.markdown("#### Evolución del Volumen Total de la Empresa")
         e_vol_total_raw = df_t.groupby(['sort_key', 'eje_temporal']).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
             ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
@@ -1017,7 +1017,6 @@ if app_page == "📈 INERCIA TEMPORAL":
         e_vol_total = e_vol_total.sort_values("sort_key")
 
         if TABLEROS.get("i_inercia", True):
-            st.markdown("#### 1. Evolución del Volumen Total de la Empresa")
             fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
             fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
             fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
@@ -1044,7 +1043,7 @@ if app_page == "📈 INERCIA TEMPORAL":
         st.markdown("---")
 
         # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg + Producto Cartesiano) ---
-        st.markdown(f"#### 2. Empuje por Producto (Tendencia por {v_mode})")
+        st.markdown(f"#### Empuje por Producto (Tendencia por {v_mode})")
         e_sub_raw = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
             volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
         ).reset_index()
@@ -1083,12 +1082,12 @@ if app_page == "📈 INERCIA TEMPORAL":
 
         st.markdown("---")
 
+        st.markdown("#### Dominancia por Zona (Ranking Volumen)")
+        r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
+        ).reset_index()
+        
         if TABLEROS.get("i_dom", True):
-            st.markdown("#### 3. Dominancia por Zona (Ranking Volumen)")
-            r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
-                volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
-            ).reset_index()
-            
             fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
             fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
             fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
@@ -1126,7 +1125,7 @@ if app_page == "🍩 PODER DE MERCADO":
 
         # --- SECCIÓN 1: MIX POR PROVEEDOR (BARRA HORIZONTAL) ---
         if TABLEROS.get("m_prov", True):
-            st.markdown("#### 1. Concentración de Volumen por Proveedor")
+            st.markdown("#### Concentración de Volumen por Proveedor")
             # El mayor volumen siempre arriba para lectura rápida
             fig_prov_2 = px.bar(
                 prov_mix, 
@@ -1168,7 +1167,7 @@ if app_page == "🍩 PODER DE MERCADO":
         ).reset_index()
 
         if TABLEROS.get("m_part", True):
-            st.markdown("#### 2. Participación por Tipo de Producto")
+            st.markdown("#### Participación por Tipo de Producto")
             fig_pie = px.pie(
                 mix_global, 
                 values='volumen', 
@@ -1184,7 +1183,7 @@ if app_page == "🍩 PODER DE MERCADO":
 
         st.markdown("---")
         if TABLEROS.get("m_terr", True):
-            st.markdown("#### 3. Batalla por el Dominio Territorial (Share de Banderas)")
+            st.markdown("#### Batalla por el Dominio Territorial (Share de Banderas)")
             if 'bandera' in dff.columns:
                 ag_bandera = dff.groupby(['bandera', 'subti_comb']).agg(volumen=("volumen", "sum")).reset_index()
                 fig_bandera = px.bar(
@@ -1670,12 +1669,12 @@ if app_page == "⚙️ CONFIGURACIÓN":
             
             st.markdown("### 📈 INERCIA TEMPORAL")
             i_inercia = st.toggle("📊 Inercia Temporal de Despacho", value=TABLEROS.get("i_inercia", True))
-            i_dom = st.toggle("3. Dominancia por Zona (Ranking Volumen)", value=TABLEROS.get("i_dom", True))
+            i_dom = st.toggle("🏅 Dominancia por Zona (Ranking Volumen)", value=TABLEROS.get("i_dom", True))
             
             st.markdown("### 🍩 PODER DE MERCADO")
             m_prov = st.toggle("🏭 Poder de Negociación por Proveedor", value=TABLEROS.get("m_prov", True))
-            m_part = st.toggle("2. Participación por Tipo de Producto (Dona)", value=TABLEROS.get("m_part", True))
-            m_terr = st.toggle("3. Batalla por el Dominio Territorial (Bandera)", value=TABLEROS.get("m_terr", True))
+            m_part = st.toggle("🍩 Participación por Tipo de Producto (Dona)", value=TABLEROS.get("m_part", True))
+            m_terr = st.toggle("🚩 Batalla por el Dominio Territorial (Bandera)", value=TABLEROS.get("m_terr", True))
             
             st.markdown("### 🧠 COPILOTO ESTRATÉGICO")
             c_vel = st.toggle("🏎️ Tacómetro de Velocidad Comercial", value=TABLEROS.get("c_vel", True))
