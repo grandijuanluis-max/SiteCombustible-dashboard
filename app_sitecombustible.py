@@ -537,6 +537,7 @@ def check_login():
                                         "inercia": str(r_norm.get('inercia', '')).strip().lower(),
                                         "mercado": str(r_norm.get('mercado', '')).strip().lower(),
                                         "copiloto": str(r_norm.get('copiloto', '')).strip().lower(),
+                                        "vs_mercado": str(r_norm.get('vs_mercado', '')).strip().lower(),
                                         "datos": str(r_norm.get('datos', '')).strip().lower(),
                                         "admin": str(r_norm.get('admin', '')).strip().lower(),
                                         "can_config": str(r_norm.get('can_config', '')).strip().lower()
