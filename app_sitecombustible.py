@@ -1636,23 +1636,27 @@ if app_page == "⚔️ MI EMPRESA VS EL RESTO":
     if api_key:
         genai.configure(api_key=api_key)
         
-        # Generar contexto resumido para no exceder token limits
+        # Injectar la base de datos TRANSACCIONAL COMPLETA (gemini 2.5 soporta hasta 1 millón de tokens)
         if dff.empty:
             contexto_estrategico = "El cliente no tiene ventas registradas en sus datos históricos en función a los filtros actuales. Esto podría significar CERO despachos este mes."
         else:
-            volumen_total = dff['volumen'].sum()
-            ventas_totales = dff['venta_total'].sum()
-            top_marcas = dff.groupby('subti_comb')['volumen'].sum().sort_values(ascending=False).head(3).to_dict()
-            top_zonas = dff.groupby('provincia')['volumen'].sum().sort_values(ascending=False).head(3).to_dict()
-            clientes_unicos = dff['nombre'].nunique()
+            # Seleccionamos las columnas más relevantes para no saturar memoria inútilmente, pero pasamos TODAS las filas
+            cols_to_keep = ['fecha', 'proveedor', 'localidad', 'provincia', 'nombre', 'subti_comb', 'volumen', 'venta_total', 'bandera']
+            cols_exist = [c for c in cols_to_keep if c in dff.columns]
+            
+            # Convertimos TODA la tabla a CSV (limitado a 50,000 filas por seguridad de payload HTTP, que suele ser más que suficiente)
+            csv_data = dff[cols_exist].head(50000).to_csv(index=False)
             
             contexto_estrategico = f"""
-RESUMEN DE MI EMPRESA (Dataset Interno):
-- Volumen Histórico Total: {volumen_total:,.2f} Litros.
-- Clientes Únicos: {clientes_unicos}
-- Ingresos Brutos Totales Estimados: ${ventas_totales:,.2f}
-- Top Productos más Vendidos: {top_marcas}
-- Top Zonas de Operación: {top_zonas}
+======= BASE DE DATOS TRANSACCIONAL BRUTA (NO RESUMIDA) =======
+El usuario te ha proveído acceso a CADA UNA de las ventas, línea por línea.
+A continuación tienes la tabla completa en formato CSV. 
+ÚSALA para buscar fechas exactas, clientes ("nombre"), localidades específicas, cruces de tipos de combustible ("subti_comb"), etc:
+
+```csv
+{csv_data}
+```
+===============================================================
 """
         rubro_empresa = SYS_CONF.get("empresa_rubro", "Comercialización de Combustibles")
         actividad_empresa = SYS_CONF.get("empresa_actividad", "Distribución Mayorista")
