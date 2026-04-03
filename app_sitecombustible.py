@@ -16,6 +16,8 @@ from geopy.geocoders import Nominatim
 from fpdf import FPDF
 from datetime import datetime, date, timedelta
 import ast # Added for potential literal_eval if needed, assuming 'astic' was a typo
+import google.generativeai as genai
+from streamlit_mic_recorder import mic_recorder
 
 # ==========================================
 # 📑 MOTOR DE EXPORTACIÓN CORPORATIVA (HELPER FUNCTIONS)
@@ -651,6 +653,7 @@ if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
 if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
 if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
 if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+if perms.get('vs_mercado') == 'si': all_pages.append("⚔️ MI EMPRESA VS EL RESTO")
 if perms.get('datos') == 'si': all_pages.append("📊 ANÁLISIS DE DATOS PUROS")
 if perms.get('admin') == 'si': all_pages.append("👥 GESTIÓN DE PERSONAL")
 if perms.get('can_config') == 'si': all_pages.append("⚙️ CONFIGURACIÓN")
@@ -684,6 +687,8 @@ if app_page == "🌐 HUB PRINCIPAL":
         modulos.append({"title": "### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.", "btn": "Ir a Mercado", "target": "🍩 PODER DE MERCADO", "style": st.error})
     if perms.get('copiloto') == 'si':
         modulos.append({"title": "### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.", "btn": "Ir a Copiloto", "target": "🧠 COPILOTO ESTRATÉGICO", "style": st.info})
+    if perms.get('vs_mercado') == 'si':
+        modulos.append({"title": "### ⚔️ Mi Empresa VS El Resto\nIA Estratégica con Gemini y Benchmarking.", "btn": "Ir a Consultor IA", "target": "⚔️ MI EMPRESA VS EL RESTO", "style": st.info})
     if perms.get('datos') == 'si':
         modulos.append({"title": "### 📊 Datos Puros\nTablas estáticas y exportaciones crudas.", "btn": "Ir a Datos Puros", "target": "📊 ANÁLISIS DE DATOS PUROS", "style": st.success})
     if perms.get('admin') == 'si':
@@ -1614,6 +1619,124 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
     else:
         st.warning("⚠️ No se encontraron registros para los filtros seleccionados.")
 
+# --- TAB 6: MI EMPRESA VS EL RESTO (Consultor AI) ---
+if app_page == "⚔️ MI EMPRESA VS EL RESTO":
+    st.markdown("<h2 style='color:#ffffff'>⚔️ Mi Empresa VS El Mercado (AI Consultant)</h2>", unsafe_allow_html=True)
+    st.info("💡 Hazle una pregunta en texto o activa el micrófono para hablar con tu Consultor IA. La IA está conectada a tu histórico de ventas y tiene conocimiento sobre YPF, Shell, Axion, Puma y Gulf.")
+    
+    # 1. Configurar Gemini
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.warning("🚨 La variable `GEMINI_API_KEY` no ha sido encontrada en tus Secrets. Ingresa la clave provista o añade una en la Nube.")
+        temp_api = st.text_input("Ingresar GEMINI API KEY Manualmente (Temporal):", type="password")
+        if temp_api:
+            api_key = temp_api
+            
+    if api_key:
+        genai.configure(api_key=api_key)
+        
+        # Generar contexto resumido para no exceder token limits
+        if dff.empty:
+            contexto_estrategico = "El cliente no tiene ventas registradas en sus datos históricos en función a los filtros actuales. Esto podría significar CERO despachos este mes."
+        else:
+            volumen_total = dff['volumen'].sum()
+            ventas_totales = dff['venta_total'].sum()
+            top_marcas = dff.groupby('subti_comb')['volumen'].sum().sort_values(ascending=False).head(3).to_dict()
+            top_zonas = dff.groupby('provincia')['volumen'].sum().sort_values(ascending=False).head(3).to_dict()
+            clientes_unicos = dff['nombre'].nunique()
+            
+            contexto_estrategico = f"""
+RESUMEN DE MI EMPRESA (Dataset Interno):
+- Volumen Histórico Total: {volumen_total:,.2f} Litros.
+- Clientes Únicos: {clientes_unicos}
+- Ingresos Brutos Totales Estimados: ${ventas_totales:,.2f}
+- Top Productos más Vendidos: {top_marcas}
+- Top Zonas de Operación: {top_zonas}
+"""
+        rubro_empresa = SYS_CONF.get("empresa_rubro", "Comercialización de Combustibles")
+        actividad_empresa = SYS_CONF.get("empresa_actividad", "Distribución Mayorista")
+        
+        system_prompt = f"""
+ERES UN CONSULTOR C-LEVEL ESTRATÉGICO ESPECIALIZADO EN EL RUBRO: {rubro_empresa.upper()}, ACTIVIDAD: {actividad_empresa.upper()} EN ARGENTINA.
+Tu objetivo es ayudar a esta empresa evaluando sus números frente a los líderes y promedios de su mercado (si es combustibles: YPF, Shell, Axion, Puma; si es otro rubro, los equivalentes) basándote en la información pública disponible en internet.
+El usuario te indicará un problema o hará una pregunta (puede ser un directivo escribiendo o hablándote por voz).
+
+Datos internos de nuestra empresa (USALOS PARA COMPARAR Y ACONSEJAR PLANES DE ACCIÓN TRÍPLEMENTE VERIFICADOS):
+{contexto_estrategico}
+
+Reglas:
+1. Sé extremadamente profesional y analítico, simulando un consultor Top Tier (ej. McKinsey / BCG) en el rubro {rubro_empresa}.
+2. Compara sistemáticamente nuestro desempeño con las métricas típicas de líderes del sector.
+3. Plantea recomendaciones viables en bullet points estructurados.
+4. Si la pregunta incluye un tono hablado (como si fuera un audio), sé un poco más conversacional pero conservando la elegancia C-level del negocio.
+"""
+        
+        if "messages_vs" not in st.session_state:
+            st.session_state.messages_vs = [{"role": "assistant", "content": "Hola. Soy tu consultor estratégico automatizado de mercado. ¿Qué competidor te gustaría analizar hoy o qué métrica de tu portafolio evaluamos?"}]
+
+        for msg in st.session_state.messages_vs:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Controles Input (Texto + Voz)
+        c_mic, c_txt = st.columns([1, 8])
+        with c_mic:
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+            audio_data = mic_recorder(start_prompt="Record 🎙️", stop_prompt="Stop ⏹️", key='mic_recorder', format="wav")
+            
+        with c_txt:
+            prompt = st.chat_input("Escribe tu consulta estratégica aquí...")
+
+        user_content = ""
+        user_audio_bytes = None
+        
+        audio_id = audio_data.get('id') if audio_data and isinstance(audio_data, dict) else None
+        
+        if prompt:
+            user_content = prompt
+        elif audio_data is not None and st.session_state.get('last_audio_id') != audio_id:
+            user_audio_bytes = audio_data['bytes']
+            st.session_state.last_audio_id = audio_id
+
+        if user_content or user_audio_bytes:
+            display_text = user_content if user_content else "🎤 *[Mensaje de Audio Grabado y Transmitido]*"
+            st.session_state.messages_vs.append({"role": "user", "content": display_text})
+            
+            with st.chat_message("user"):
+                st.markdown(display_text)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Conectándome como Agente C-Level... comparando el mercado de hidrocarburos..."):
+                    try:
+                        # Usar Gemini 1.5 Flash API Multimodal nativo
+                        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_prompt)
+                        
+                        contents = []
+                        if user_audio_bytes:
+                            audio_blob = {
+                                "mime_type": "audio/wav",
+                                "data": user_audio_bytes
+                            }
+                            contents.append(audio_blob)
+                        if user_content:
+                            contents.append(user_content)
+                        else:
+                            contents.append("Por favor escucha y responde al audio adjunto basándote en mi contexto interno y tu conocimiento del mercado de hidrocarburos en Argentina.")
+                            
+                        # Concatenamos el historial para memoria artificial (simplificado)
+                        chat_history = ""
+                        for m in st.session_state.messages_vs[:-1]:
+                            chat_history += f"{m['role'].upper()}: {m['content']}\n\n"
+                        if chat_history:
+                            contents.insert(0, "HISTORIAL DE CONVERSACIÓN PREVIO PARA DAR CONTEXTO:\n" + chat_history)
+
+                        response = model.generate_content(contents)
+                        respuesta = response.text
+                        st.markdown(respuesta)
+                        st.session_state.messages_vs.append({"role": "assistant", "content": respuesta})
+                    except Exception as e:
+                        st.error(f"Error procesando la IA Consultiva: {e}")
+
 # --- TAB EXTRA: GESTIÓN DE PERSONAL (ADMIN RBAC) ---
 if app_page == "👥 GESTIÓN DE PERSONAL":
     st.markdown("<h2 style='color:#ffffff'>👥 Panel de Control de Administradores</h2>", unsafe_allow_html=True)
@@ -1648,6 +1771,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
             p_ine = st.checkbox("📈 INERCIA TEMPORAL")
             p_mer = st.checkbox("🍩 PODER DE MERCADO")
             p_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO")
+            p_vsr = st.checkbox("⚔️ MI EMPRESA VS EL RESTO")
             p_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS")
             p_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)")
             p_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA")
@@ -1668,6 +1792,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                             "inercia": "si" if p_ine else "no",
                             "mercado": "si" if p_mer else "no",
                             "copiloto": "si" if p_cop else "no",
+                            "vs_mercado": "si" if p_vsr else "no",
                             "datos": "si" if p_dat else "no",
                             "admin": "si" if p_adm else "no",
                             "can_config": "si" if p_cfg else "no"
@@ -1700,6 +1825,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                     e_ine = st.checkbox("📈 INERCIA TEMPORAL", value=(str(user_data.get('inercia', '')).lower() == 'si'))
                     e_mer = st.checkbox("🍩 PODER DE MERCADO", value=(str(user_data.get('mercado', '')).lower() == 'si'))
                     e_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
+                    e_vsr = st.checkbox("⚔️ MI EMPRESA VS EL RESTO", value=(str(user_data.get('vs_mercado', '')).lower() == 'si'))
                     e_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS", value=(str(user_data.get('datos', '')).lower() == 'si'))
                     e_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)", value=(str(user_data.get('admin', '')).lower() == 'si'))
                     e_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA", value=(str(user_data.get('can_config', '')).lower() == 'si'))
@@ -1716,6 +1842,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                                 "inercia": "si" if e_ine else "no",
                                 "mercado": "si" if e_mer else "no",
                                 "copiloto": "si" if e_cop else "no",
+                                "vs_mercado": "si" if e_vsr else "no",
                                 "datos": "si" if e_dat else "no",
                                 "admin": "si" if e_adm else "no",
                                 "can_config": "si" if e_cfg else "no"
@@ -1747,7 +1874,7 @@ if app_page == "👥 GESTIÓN DE PERSONAL":
                             try:
                                 supabase.table("usuarios").update({
                                     "ingesta": "no", "vision": "no", "inercia": "no",
-                                    "mercado": "no", "copiloto": "no", "admin": "no", "can_config": "no"
+                                    "mercado": "no", "copiloto": "no", "vs_mercado": "no", "datos": "no", "admin": "no", "can_config": "no"
                                 }).eq("id", user_del['id']).execute()
                                 st.success("Cuenta archivada de forma segura.")
                                 import time
@@ -1779,6 +1906,8 @@ if app_page == "⚙️ CONFIGURACIÓN":
             st.subheader("Configuración Visual")
             nv_nombre = st.text_input("Sufijo del Título Comercial", value=SYS_CONF.get("empresa_nombre", "Neural Hub"), help="Reemplaza la palabra 'Neural Hub' en el título general.")
             nv_logo = st.text_input("URL del Logo (Formato http:// o un Emoji)", value=SYS_CONF.get("logo_url", "🤖"), help="Reemplaza el ícono del tanque/robot general.")
+            nv_rubro = st.text_input("Rubro del Negocio", value=SYS_CONF.get("empresa_rubro", "Comercialización de Combustibles"), help="El rubro principal de la empresa. Servirá de contexto vital para el Consultor de IA Gemini.")
+            nv_actividad = st.text_input("Actividad Específica", value=SYS_CONF.get("empresa_actividad", "Distribución Mayorista (Downstream)"), help="La rama particular. Ej: Agro, Logística, Distribución.")
             
             sub_brand = st.form_submit_button("💾 Guardar Brand System", type="primary")
             if sub_brand:
@@ -1786,7 +1915,12 @@ if app_page == "⚙️ CONFIGURACIÓN":
                     url = st.secrets.get("SUPABASE_URL")
                     key = st.secrets.get("SUPABASE_KEY")
                     sc: Client = create_client(url, key)
-                    sc.table("configuracion").update({"empresa_nombre": nv_nombre, "logo_url": nv_logo}).eq("id", 1).execute()
+                    sc.table("configuracion").update({
+                        "empresa_nombre": nv_nombre, 
+                        "logo_url": nv_logo,
+                        "empresa_rubro": nv_rubro,
+                        "empresa_actividad": nv_actividad
+                    }).eq("id", 1).execute()
                     load_sys_config.clear()
                     st.success("¡Marca registrada con éxito! Aplicando cambios...")
                     time.sleep(1)
