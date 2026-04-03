@@ -857,10 +857,11 @@ if app_page == "🚀 INGESTA & CARGA":
 # --- TAB 1: DASHBOARD EJECUTIVO ---
 if app_page == "🏠 VISIÓN EJECUTIVA":
     if not dff.empty:
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Volumen Bruto (Total)", f"{vol_tot_global:,.0f}")
-        k2.metric("Clientes Activos", cli_tot_global)
-        k3.metric("Ventas Est. ($)", f"$ {dff['venta_total'].sum():,.0f}")
+        if TABLEROS.get("vis_kpi", True):
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Volumen Bruto (Total)", f"{vol_tot_global:,.0f}")
+            k2.metric("Clientes Activos", cli_tot_global)
+            k3.metric("Ventas Est. ($)", f"$ {dff['venta_total'].sum():,.0f}")
         
         if TABLEROS.get("vis_mapa", True):
             st.subheader("📍 Concentración Geográfica (Mapa de Sensibilidad)")
@@ -1044,7 +1045,7 @@ if app_page == "📈 INERCIA TEMPORAL":
             
         e_vol_total = e_vol_total.sort_values("sort_key")
 
-        if TABLEROS.get("i_inercia", True):
+        if TABLEROS.get("i_total", True):
             fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
             fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
             fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
@@ -1086,7 +1087,7 @@ if app_page == "📈 INERCIA TEMPORAL":
             
         e_sub = e_sub.sort_values("sort_key")
 
-        if TABLEROS.get("i_inercia", True):
+        if TABLEROS.get("i_prod", True):
             fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje, 'subti_comb': 'Combustible'})
             fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
                                paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
@@ -1468,144 +1469,147 @@ if app_page == "📊 ANÁLISIS DE DATOS PUROS":
         st.info("💡 En esta sección puedes auditar y descargar los datos crudos en grillas estáticas. Las exportaciones corporativas incluirán automáticamente la columna 'Domicilio'.")
 
         # --- VISTA 1: Resumen por Cliente ---
-        st.markdown("#### Resumen por Cliente")
-        t1 = d_puros.groupby(["provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
-            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
-            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
-        ).reset_index()
-        
-        t1_ui = t1.drop(columns=["domicilio"])
-        t1_ui.columns = ["Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(
-            t1_ui, 
-            use_container_width=True,
-            column_config={
-                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
-                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
-            }
-        )
-        
-        t1_exp = t1.rename(columns={
-            "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
-            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
-        })
-        
-        col_dp1, _ = st.columns([1, 2])
-        with col_dp1.expander("📥 Exportar Resumen Cliente", expanded=False):
-            ed1_1, ed1_2 = st.columns(2)
-            fmt_dp1 = ed1_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp1")
-            mod_dp1 = ed1_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp1", horizontal=True)
-            if fmt_dp1 == "PDF":
-                btn_dp1 = generar_pdf_corporativo(t1_exp, "Resumen General por Cliente", txt_filtros_dp, mod_dp1)
-                st.download_button("Descargar Reporte PDF", btn_dp1, "Resumen_Cliente.pdf", "application/pdf")
-            else:
-                btn_xdp1 = generar_excel_corporativo(t1_exp, fmt_dp1.lower())
-                st.download_button(f"Descargar Archivo {fmt_dp1}", btn_xdp1, f"Resumen_Cliente.{fmt_dp1.lower()}")
+        if TABLEROS.get("dp_cliente", True):
+            st.markdown("#### Resumen por Cliente")
+            t1 = d_puros.groupby(["provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+            
+            t1_ui = t1.drop(columns=["domicilio"])
+            t1_ui.columns = ["Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t1_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            
+            t1_exp = t1.rename(columns={
+                "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+            
+            col_dp1, _ = st.columns([1, 2])
+            with col_dp1.expander("📥 Exportar Resumen Cliente", expanded=False):
+                ed1_1, ed1_2 = st.columns(2)
+                fmt_dp1 = ed1_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp1")
+                mod_dp1 = ed1_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp1", horizontal=True)
+                if fmt_dp1 == "PDF":
+                    btn_dp1 = generar_pdf_corporativo(t1_exp, "Resumen General por Cliente", txt_filtros_dp, mod_dp1)
+                    st.download_button("Descargar Reporte PDF", btn_dp1, "Resumen_Cliente.pdf", "application/pdf")
+                else:
+                    btn_xdp1 = generar_excel_corporativo(t1_exp, fmt_dp1.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp1}", btn_xdp1, f"Resumen_Cliente.{fmt_dp1.lower()}")
 
         st.markdown("---")
         
         # --- VISTA 2: Resumen Mensual ---
-        st.markdown("#### Resumen Mensual por Cliente")
-        t2_base = d_puros.copy()
-        
-        if 'fecha_dt' in t2_base.columns:
-            # Creamos una máscara de ordenación (YYYY-MM) y la máscara visual directamente del campo original Datetime real
-            t2_base['sort_ym'] = t2_base['fecha_dt'].dt.strftime('%Y-%m').fillna('0000-00')
-            t2_base['fecha_mes'] = t2_base['fecha_dt'].dt.strftime('%m/%Y').fillna('S/D')
-        else:
-            t2_base['sort_ym'] = "0000-00"
-            t2_base['fecha_mes'] = "S/D"
+        if TABLEROS.get("dp_mensual", True):
+            st.markdown("#### Resumen Mensual por Cliente")
+            t2_base = d_puros.copy()
             
-        if 'codigo' not in t2_base.columns: t2_base['codigo'] = "S/D"
-        if 'detalle' not in t2_base.columns: t2_base['detalle'] = "S/D"
-        
-        t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"]).agg(
-            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
-            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
-        ).reset_index()
-        
-        # Orden Cronológico Genuino y definitivo
-        t2 = t2.sort_values(by=['sort_ym'], ascending=True)
-        
-        t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
-        t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(
-            t2_ui, 
-            use_container_width=True,
-            column_config={
-                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
-                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
-            }
-        )
-        
-        t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
-            "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
-            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
-        })
-        
-        col_dp2, _ = st.columns([1, 2])
-        with col_dp2.expander("📥 Exportar Resumen Mensual", expanded=False):
-            ed2_1, ed2_2 = st.columns(2)
-            fmt_dp2 = ed2_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp2")
-            mod_dp2 = ed2_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp2", horizontal=True)
-            if fmt_dp2 == "PDF":
-                btn_dp2 = generar_pdf_corporativo(t2_exp, "Agrupacion Mensual por Cliente", txt_filtros_dp, mod_dp2)
-                st.download_button("Descargar Reporte PDF ", btn_dp2, "Resumen_Mensual.pdf", "application/pdf")
+            if 'fecha_dt' in t2_base.columns:
+                # Creamos una máscara de ordenación (YYYY-MM) y la máscara visual directamente del campo original Datetime real
+                t2_base['sort_ym'] = t2_base['fecha_dt'].dt.strftime('%Y-%m').fillna('0000-00')
+                t2_base['fecha_mes'] = t2_base['fecha_dt'].dt.strftime('%m/%Y').fillna('S/D')
             else:
-                btn_xdp2 = generar_excel_corporativo(t2_exp, fmt_dp2.lower())
-                st.download_button(f"Descargar Archivo {fmt_dp2} ", btn_xdp2, f"Resumen_Mensual.{fmt_dp2.lower()}")
+                t2_base['sort_ym'] = "0000-00"
+                t2_base['fecha_mes'] = "S/D"
+                
+            if 'codigo' not in t2_base.columns: t2_base['codigo'] = "S/D"
+            if 'detalle' not in t2_base.columns: t2_base['detalle'] = "S/D"
+            
+            t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"]).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+            
+            # Orden Cronológico Genuino y definitivo
+            t2 = t2.sort_values(by=['sort_ym'], ascending=True)
+            
+            t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+            t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t2_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            
+            t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
+                "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+            
+            col_dp2, _ = st.columns([1, 2])
+            with col_dp2.expander("📥 Exportar Resumen Mensual", expanded=False):
+                ed2_1, ed2_2 = st.columns(2)
+                fmt_dp2 = ed2_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp2")
+                mod_dp2 = ed2_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp2", horizontal=True)
+                if fmt_dp2 == "PDF":
+                    btn_dp2 = generar_pdf_corporativo(t2_exp, "Agrupacion Mensual por Cliente", txt_filtros_dp, mod_dp2)
+                    st.download_button("Descargar Reporte PDF ", btn_dp2, "Resumen_Mensual.pdf", "application/pdf")
+                else:
+                    btn_xdp2 = generar_excel_corporativo(t2_exp, fmt_dp2.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp2} ", btn_xdp2, f"Resumen_Mensual.{fmt_dp2.lower()}")
 
         st.markdown("---")
 
         # --- VISTA 3: Base Abierta ---
-        st.markdown("#### Detalle Abierto de Base")
-        t3 = d_puros.copy()
-        if 'fecha_dt' in t3.columns:
-            t3 = t3.dropna(subset=['fecha_dt'])
-        else:
-            t3['fecha_dt'] = pd.NaT
-
-        if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
-        if 'detalle' not in t3.columns: t3['detalle'] = "S/D"
-
-        t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"], dropna=False).agg(
-            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
-            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
-        ).reset_index()
-
-        t3_ag = t3_ag.sort_values(by="fecha_dt", ascending=True)
-        t3_ag['fecha_corta'] = t3_ag['fecha_dt'].dt.strftime('%d/%m/%Y').fillna("S/D")
-
-        t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
-        t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
-        st.dataframe(
-            t3_ui, 
-            use_container_width=True,
-            column_config={
-                "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
-                "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
-            }
-        )
-
-        t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
-            "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
-            "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
-            "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
-        })
-
-        col_dp3, _ = st.columns([1, 2])
-        with col_dp3.expander("📥 Exportar Detalle Abierto (Registros)", expanded=False):
-            ed3_1, ed3_2 = st.columns(2)
-            fmt_dp3 = ed3_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp3")
-            mod_dp3 = ed3_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp3", horizontal=True)
-            if fmt_dp3 == "PDF":
-                btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3, orientacion="L")
-                st.download_button("Descargar Reporte PDF  ", btn_dp3, "Detalle_Abierto.pdf", "application/pdf")
+        if TABLEROS.get("dp_abierto", True):
+            st.markdown("#### Detalle Abierto de Base")
+            t3 = d_puros.copy()
+            if 'fecha_dt' in t3.columns:
+                t3 = t3.dropna(subset=['fecha_dt'])
             else:
-                btn_xdp3 = generar_excel_corporativo(t3_exp, fmt_dp3.lower())
-                st.download_button(f"Descargar Archivo {fmt_dp3}  ", btn_xdp3, f"Detalle_Abierto.{fmt_dp3.lower()}")
+                t3['fecha_dt'] = pd.NaT
+    
+            if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
+            if 'detalle' not in t3.columns: t3['detalle'] = "S/D"
+    
+            t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"], dropna=False).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+    
+            t3_ag = t3_ag.sort_values(by="fecha_dt", ascending=True)
+            t3_ag['fecha_corta'] = t3_ag['fecha_dt'].dt.strftime('%d/%m/%Y').fillna("S/D")
+    
+            t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+            t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t3_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+    
+            t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
+                "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+    
+            col_dp3, _ = st.columns([1, 2])
+            with col_dp3.expander("📥 Exportar Detalle Abierto (Registros)", expanded=False):
+                ed3_1, ed3_2 = st.columns(2)
+                fmt_dp3 = ed3_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp3")
+                mod_dp3 = ed3_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp3", horizontal=True)
+                if fmt_dp3 == "PDF":
+                    btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3, orientacion="L")
+                    st.download_button("Descargar Reporte PDF  ", btn_dp3, "Detalle_Abierto.pdf", "application/pdf")
+                else:
+                    btn_xdp3 = generar_excel_corporativo(t3_exp, fmt_dp3.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp3}  ", btn_xdp3, f"Detalle_Abierto.{fmt_dp3.lower()}")
 
     else:
         st.warning("⚠️ No se encontraron registros para los filtros seleccionados.")
@@ -1852,11 +1856,13 @@ if app_page == "⚙️ CONFIGURACIÓN":
         st.info("💡 Al apagar un tablero, se ocultará instantáneamente para TODOS en la corporación. El diseño inteligente subirá los módulos inferiores para evitar dejar 'huecos' grises en la pantalla.")
         with st.form("form_toggles"):
             st.markdown("### 🏠 VISIÓN EJECUTIVA")
+            vis_kpi = st.toggle("📊 KPIs Principales (Tarjetas)", value=TABLEROS.get("vis_kpi", True))
             v_mapa = st.toggle("📍 Concentración Geográfica (Mapa de Sensibilidad)", value=TABLEROS.get("vis_mapa", True))
             v_grilla = st.toggle("🚦 Grilla Estratégica (Análisis de Mercado)", value=TABLEROS.get("vis_grilla", True))
             
             st.markdown("### 📈 INERCIA TEMPORAL")
-            i_inercia = st.toggle("📊 Inercia Temporal de Despacho", value=TABLEROS.get("i_inercia", True))
+            i_total = st.toggle("📊 Evolución del Volumen Total", value=TABLEROS.get("i_total", True))
+            i_prod = st.toggle("🏷️ Empuje por Producto (Tendencia)", value=TABLEROS.get("i_prod", True))
             i_dom = st.toggle("🏅 Dominancia por Zona (Ranking Volumen)", value=TABLEROS.get("i_dom", True))
             
             st.markdown("### 🍩 PODER DE MERCADO")
@@ -1871,13 +1877,20 @@ if app_page == "⚙️ CONFIGURACIÓN":
             c_score = st.toggle("🧠 Ranking de Relevancia Estratégica ($Score$)", value=TABLEROS.get("c_score", True))
             c_adn = st.toggle("🌲 Radiografía Sectorial (ADN del Cliente)", value=TABLEROS.get("c_adn", True))
             
+            st.markdown("### 📊 ANÁLISIS DE DATOS PUROS")
+            dp_cliente = st.toggle("👥 Resumen por Cliente", value=TABLEROS.get("dp_cliente", True))
+            dp_mensual = st.toggle("📅 Resumen Mensual por Cliente", value=TABLEROS.get("dp_mensual", True))
+            dp_abierto = st.toggle("📖 Detalle Abierto de Base (Registros)", value=TABLEROS.get("dp_abierto", True))
+            
             if st.form_submit_button("💾 Guardar y Aplicar Layout", type="primary", use_container_width=True):
                 try:
                     sc = create_client(st.secrets.get("SUPABASE_URL"), st.secrets.get("SUPABASE_KEY"))
                     nuevos_tableros = {
-                        "vis_mapa": v_mapa, "vis_grilla": v_grilla, "i_inercia": i_inercia, "i_dom": i_dom,
+                        "vis_kpi": vis_kpi, "vis_mapa": v_mapa, "vis_grilla": v_grilla, 
+                        "i_total": i_total, "i_prod": i_prod, "i_dom": i_dom,
                         "m_prov": m_prov, "m_part": m_part, "m_terr": m_terr,
-                        "c_vel": c_vel, "c_aler": c_aler, "c_matriz": c_matriz, "c_score": c_score, "c_adn": c_adn
+                        "c_vel": c_vel, "c_aler": c_aler, "c_matriz": c_matriz, "c_score": c_score, "c_adn": c_adn,
+                        "dp_cliente": dp_cliente, "dp_mensual": dp_mensual, "dp_abierto": dp_abierto
                     }
                     # PostgreSQL/Supabase JSONb acepta el diccionario de Python directamente sin stringificar
                     sc.table("configuracion").update({"tableros_activos": nuevos_tableros}).eq("id", 1).execute()
