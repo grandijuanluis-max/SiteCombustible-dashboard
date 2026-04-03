@@ -1644,14 +1644,15 @@ if app_page == "⚔️ MI EMPRESA VS EL RESTO":
             cols_to_keep = ['fecha', 'proveedor', 'localidad', 'provincia', 'nombre', 'subti_comb', 'volumen', 'venta_total', 'bandera']
             cols_exist = [c for c in cols_to_keep if c in dff.columns]
             
-            # Convertimos TODA la tabla a CSV (limitado a 50,000 filas por seguridad de payload HTTP, que suele ser más que suficiente)
-            csv_data = dff[cols_exist].head(50000).to_csv(index=False)
+            # Convertimos la tabla a CSV (LIMITADA A LAS ÚLTIMAS 5,000 FILAS para evitar el bloqueo por la Cuota Gratuita (Free Tier) de 250k tokens de Google)
+            csv_data = dff[cols_exist].tail(5000).to_csv(index=False)
             
             contexto_estrategico = f"""
-======= BASE DE DATOS TRANSACCIONAL BRUTA (NO RESUMIDA) =======
-El usuario te ha proveído acceso a CADA UNA de las ventas, línea por línea.
-A continuación tienes la tabla completa en formato CSV. 
-ÚSALA para buscar fechas exactas, clientes ("nombre"), localidades específicas, cruces de tipos de combustible ("subti_comb"), etc:
+======= BASE DE DATOS TRANSACCIONAL (Muestra de hasta 5,000 registros actuales) =======
+El usuario te ha proveído acceso a sus operaciones recientes o filtradas.
+A continuación tienes la tabla en formato CSV. 
+ÚSALA para buscar fechas exactas, clientes ("nombre"), localidades específicas, cruces de tipos de combustible ("subti_comb"), etc.
+*Si te preguntan por un dato y no está aquí, diles cordialmente que utilicen los filtros visuales de la aplicación para "enfocar" los datos antes de preguntarte.*
 
 ```csv
 {csv_data}
