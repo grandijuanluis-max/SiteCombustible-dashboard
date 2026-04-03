@@ -1736,7 +1736,11 @@ Reglas:
                         st.markdown(respuesta)
                         st.session_state.messages_vs.append({"role": "assistant", "content": respuesta})
                     except Exception as e:
-                        st.error(f"Error procesando la IA Consultiva: {e}")
+                        try:
+                            val_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                            st.error(f"Error 404 del Servidor de Google. Tu llave tiene acceso a estos modelos válidos: {val_models}. Error nativo: {e}")
+                        except Exception as e2:
+                            st.error(f"Error crítico en el token: {e} - No pude listar los modelos: {e2}")
 
 # --- TAB EXTRA: GESTIÓN DE PERSONAL (ADMIN RBAC) ---
 if app_page == "👥 GESTIÓN DE PERSONAL":
