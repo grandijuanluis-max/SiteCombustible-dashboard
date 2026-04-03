@@ -298,18 +298,37 @@ st.markdown(f"""
         
         /* CORREGIR CONTRASTE DE LOS DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
         div[data-baseweb="select"] > div {{
-            background-color: #f8fafc !important; /* Fondo claro de la barra de busqueda */
-            color: #0f172a !important;
+            background-color: #ffffff !important; 
+            color: #000000 !important;
         }}
-        div[data-baseweb="select"] * {{
-            color: #0f172a !important; /* Texto oscuro cuando escribimos */
+        div[data-baseweb="select"] span {{
+            color: #000000 !important; 
         }}
-        div[data-baseweb="popover"] * {{
-            color: #0f172a !important; /* Fuerza Oscuro a TODA la lista interior (ej. CHACO) */
-            font-weight: 600 !important;
+        
+        /* POPUPS Y MENUS DESPLEGABLES (UL, LI, POPOVER) */
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        div[data-baseweb="popover"] ul,
+        div[data-basename="popover"],
+        ul[role="listbox"] {{
+            background-color: #ffffff !important;
         }}
-        div[data-baseweb="menu"], div[data-baseweb="popover"] {{
-            background-color: #f8fafc !important; /* Fondo claro de la lista desplegada */
+        
+        li[role="option"] {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }}
+        
+        li[role="option"] span, 
+        li[role="option"] div, 
+        li[role="option"] p, 
+        li[role="option"] label {{
+            color: #000000 !important;
+        }}
+        
+        li[role="option"]:hover, 
+        li[role="option"][aria-selected="true"] {{
+            background-color: #f1f5f9 !important;
         }}
         
         /* Píldoras elegidas en múltiple selección */
