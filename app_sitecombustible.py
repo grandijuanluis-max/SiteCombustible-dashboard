@@ -932,7 +932,7 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
         st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
         grid = ag_map.sort_values("Score", ascending=False)
         if TABLEROS.get("vis_grilla", True):
-            st.dataframe(grid.style.applymap(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
+            st.dataframe(grid.style.map(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
 
         col_exp_grid, _ = st.columns([1, 2])
         with col_exp_grid.expander("📥 Exportar Grilla Estratégica", expanded=False):
