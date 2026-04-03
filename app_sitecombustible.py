@@ -1710,7 +1710,7 @@ Reglas:
                 with st.spinner("Conectándome como Agente C-Level... comparando el mercado de hidrocarburos..."):
                     try:
                         # Usar Gemini 1.5 Flash API Multimodal nativo
-                        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_prompt)
+                        model = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction=system_prompt)
                         
                         contents = []
                         if user_audio_bytes:
