@@ -938,12 +938,23 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
                                 lat, lon, score = coords['lat'], coords['lon'], r['Score']
                                 m_data.append([lat, lon, score])
                                 
+                                # Obtener datos de clientes de esa localidad
+                                loc_df = dff[(dff['localidad'] == r['localidad']) & (dff['provincia'] == r['provincia'])]
+                                top_clientes = loc_df.groupby('nombre')['volumen'].sum().sort_values(ascending=False).head(15)
+                                
+                                html_clientes = "<br><hr style='margin: 8px 0;'><b style='font-size:0.95em; color:#0ea5e9;'>Top Clientes en la Zona:</b><ul style='margin-top: 5px; margin-bottom: 5px; padding-left: 20px; font-size: 0.85em;'>"
+                                for cliente, v_cliente in top_clientes.items():
+                                    if pd.notna(cliente) and str(cliente).strip() not in ["S/D", "", "nan", "None"]:
+                                        nombre_corto = str(cliente)[:25] + "..." if len(str(cliente)) > 25 else str(cliente)
+                                        html_clientes += f"<li style='margin-bottom: 3px;'><b>{nombre_corto}</b>: {v_cliente:,.0f} L</li>"
+                                html_clientes += "</ul>"
+                                
                                 color_mk = "#ef4444" if score >= 5.0 else ("#eab308" if score >= 1.5 else "#3b82f6")
                                 folium.CircleMarker(
                                     location=[lat, lon],
-                                    radius=max(4, min(score * 2.5, 18)),
-                                    popup=f"<div style='min-width: 150px'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Total: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b></div>",
-                                    tooltip=f"{r['localidad']}",
+                                    radius=max(5, min(score * 2.5, 20)), # Un poco más grandes para facilitar click
+                                    popup=folium.Popup(f"<div style='min-width: 260px; max-height: 300px; overflow-y: auto; font-family: sans-serif;'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Zona: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b>{html_clientes}</div>", max_width=350),
+                                    tooltip=f"Ver Clientes en {r['localidad']}",
                                     color=color_mk,
                                     fill=True,
                                     fill_color=color_mk,
