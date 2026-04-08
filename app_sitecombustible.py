@@ -928,7 +928,8 @@ if app_page == "🏠 VISIÓN EJECUTIVA":
                         
                         top_locs = ag_map.sort_values("vol", ascending=False).head(35)
                         
-                        m = folium.Map(location=[-35.4, -63.6], zoom_start=5, tiles='cartodbdark_matter')
+                        # Se cambió el tile a 'OpenStreetMap' para mostrar el mapa político de Argentina
+                        m = folium.Map(location=[-35.4, -63.6], zoom_start=5, tiles='OpenStreetMap')
                         m_data = []
                         
                         for _, r in top_locs.iterrows():
