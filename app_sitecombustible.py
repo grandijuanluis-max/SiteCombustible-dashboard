@@ -1,0 +1,2058 @@
+import streamlit as st
+import pandas as pd
+import folium
+from folium.plugins import HeatMap
+from streamlit_folium import st_folium
+import plotly.express as px
+import plotly.graph_objects as go
+import os
+import json
+import time
+import hashlib
+import gspread
+import traceback
+from google.oauth2.service_account import Credentials
+from geopy.geocoders import Nominatim
+from fpdf import FPDF
+from datetime import datetime, date, timedelta
+import ast # Added for potential literal_eval if needed, assuming 'astic' was a typo
+import google.generativeai as genai
+from streamlit_mic_recorder import mic_recorder
+
+# ==========================================
+# 📑 MOTOR DE EXPORTACIÓN CORPORATIVA (HELPER FUNCTIONS)
+# ==========================================
+import io
+
+def generar_excel_corporativo(df_export, formato='xlsx'):
+    output = io.BytesIO()
+    if formato == 'xlsx' or formato == 'xls':
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_export.to_excel(writer, index=False, sheet_name='Datos_Inercia')
+    else:
+        df_export.to_csv(output, index=False)
+    return output.getvalue()
+
+def generar_pdf_corporativo(df_export, titulo_reporte, filtros_texto, modo="Completo", orientacion="P"):
+    pdf = FPDF(orientation=orientacion)
+    pdf.add_page()
+    # --- Encabezado Institucional ---
+    empresa_nombre = SYS_CONF.get("empresa_nombre", "JUAN LUIS CORPORATIONS")
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(30, 58, 138) # Azul Corporativo
+    pdf.cell(0, 10, f"{empresa_nombre.upper()} - SITECOMBUSTIBLE PRO", ln=True, align="C")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, titulo_reporte.upper(), ln=True, align="C")
+    
+    ancho_linea = 280 if orientacion == "L" else 200
+    pdf.line(10, 32, ancho_linea, 32)
+    pdf.ln(5)
+
+    # --- Subtítulo y Filtros (Izquierda) ---
+    pdf.set_font("Arial", "B", 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 5, "FILTROS APLICADOS EN ORIGEN:", ln=True)
+    pdf.set_font("Arial", "", 8)
+    pdf.multi_cell(0, 5, filtros_texto)
+    pdf.ln(5)
+
+    if modo == "Completo":
+        pdf.set_font("Arial", "I", 9)
+        pdf.cell(0, 10, "(Gráfico visualizado en Dashboard - Reporte de Tabla Resumen)", ln=True)
+    
+    # --- Tabla de Datos ---
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font("Arial", "B", 8)
+    pdf.set_text_color(0)
+    
+    cols = df_export.columns
+    p_width = 277 if orientacion == "L" else 190
+    col_width = p_width / len(cols)
+    for col in cols:
+        pdf.cell(col_width, 8, str(col).upper(), 1, 0, 'C', True)
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 8)
+    for _, row in df_export.iterrows():
+        for val in row:
+            pdf.cell(col_width, 7, str(val), 1, 0, 'C')
+        pdf.ln()
+
+    # --- Pie de Página (Trazabilidad) ---
+    y_linea = 195 if orientacion == "L" else 270
+    pdf.set_y(-25)
+    pdf.line(10, y_linea, ancho_linea, y_linea)
+    pdf.set_font("Arial", "I", 7)
+    now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    pdf.cell(0, 10, f"Emitido por: SiteCombustible Pro System | Empresa: {empresa_nombre} | Emisión: {now}", align="L")
+    pdf.cell(0, 10, f"Página {pdf.page_no()}", align="R")
+    
+    return pdf.output(dest='S').encode('latin-1')
+    
+# ==========================================
+# ⚙️ CONFIGURACIÓN Y ESTILO CORPORATIVO
+# ==========================================
+st.set_page_config(page_title="SiteCombustible Pro - Executive Hub", page_icon="📊", layout="wide")
+
+from supabase import create_client, Client
+import streamlit as st
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_sys_config():
+    try:
+        url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+        key = st.secrets.get("SUPABASE_KEY", "")
+        if key:
+            supabase_cli: Client = create_client(url, key)
+            resp = supabase_cli.table("configuracion").select("*").eq("id", 1).execute()
+            if resp.data:
+                return resp.data[0]
+    except Exception:
+        pass
+    return {
+        "empresa_nombre": "Neural Hub",
+        "logo_url": "🤖",
+        "etl_modo": "FTP",
+        "ftp_host": "", "ftp_user": "", "ftp_pass": "", "ftp_origen": "", "ftp_destino": "",
+        "drive_origen": "", "drive_destino": ""
+    }
+
+SYS_CONF = load_sys_config() or {}
+
+try:
+    raw_tab = SYS_CONF.get("tableros_activos", {})
+    if isinstance(raw_tab, str):
+        TABLEROS = json.loads(raw_tab) if raw_tab else {}
+    elif isinstance(raw_tab, dict):
+        TABLEROS = raw_tab
+    else:
+        TABLEROS = {}
+except:
+    TABLEROS = {}
+
+# Configuración Visual General de la Ventanas
+def render_brand_title():
+    nombre = SYS_CONF.get("empresa_nombre", "Neural Hub")
+    logo = SYS_CONF.get("logo_url", "⛽")
+    
+    if str(logo).startswith("http") or str(logo).startswith("data:image"):
+        # Aumentamos el tamaño a 6.0rem (casi el doble) y lo alineamos para que no rompa el título
+        logo_html = f"<img src='{logo}' style='height: 6.0rem; vertical-align: middle; margin-top: -10px; margin-right: 25px; border-radius: 8px;' />"
+    else:
+        logo_html = f"<span style='vertical-align: middle; font-size: 4rem;'>{logo}</span>"
+        
+    main_title = f"<h1 style='text-align: center; font-size: 3.5rem; color: #ffffff;'>{logo_html} SiteCombustible {nombre}</h1>"
+    return main_title
+
+MAIN_TITLE_HTML = render_brand_title()
+
+import base64
+from pathlib import Path
+
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# Enrutar a la foto de Juan Luis (fondo.png). Si falta, usar Refinería de Unsplash como fallback.
+local_img = "fondo.png"
+if Path(local_img).exists():
+    img_b64 = get_base64_of_bin_file(local_img)
+    bg_img_str = f'url("data:image/png;base64,{img_b64}")'
+else:
+    bg_img_str = 'url("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2500")'
+
+st.markdown(f"""
+        <style>
+        /* FONDO NIVEL DIOS ULTRA HD - CAPA BASE INQUEBRANTABLE (REFINERIA DE ORO NEGRO) */
+        [data-testid="stAppViewContainer"],
+        [data-testid="stFullScreenFrame"] {{
+            background: linear-gradient(rgba(15, 23, 42, 0.40), rgba(15, 23, 42, 0.40)), {bg_img_str} no-repeat center center fixed !important;
+            background-size: cover !important;
+        }}
+        
+        /* HEADER TOTALMENTE INVISIBLE PARA NO ROMPER LA MAGIA */
+        [data-testid="stHeader"] {{
+            background-color: transparent !important;
+        }}
+        
+        /* SIDEBAR DE CRISTAL OSCURO PERO MUY TRANSPARENTE */
+        [data-testid="stSidebar"] {{
+            background-color: rgba(15, 23, 42, 0.40) !important;
+            backdrop-filter: blur(25px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }}
+        
+        /* CONTENT CENTRAL - GLASSMORPHISM SUPREMO (NEGRO AZULADO MUY TRANSPARENTE) */
+        .main .block-container {{
+            background-color: rgba(15, 23, 42, 0.45) !important;
+            padding: 3rem !important;
+            border-radius: 24px !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.10) !important;
+            margin-top: 1rem !important;
+            margin-bottom: 2rem !important;
+            color: #ffffff !important;
+        }}
+        
+        /* TIPOGRAFÍA FUTURISTA / LIMPIA */
+        .stApp, .block-container {{
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+        }}
+        
+        /* SIDEBAR Y NAVEGACIÓN - ALTO CONTRASTE */
+        /* Asegurar lectura nítida de los radios y subtítulos que Streamlit oscurece por defecto */
+        [data-testid="stSidebarNav"] *,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {{
+            color: #ffffff !important;
+            font-weight: 500 !important;
+        }}
+        /* LECCIONES APRENDIDAS: ALTA VISIBILIDAD DE FORMULARIOS */
+        /* Fondo oscuro para que resalten los formularios y selectores */
+        div[data-testid="stForm"], div[data-testid="stTabs"] {{
+            background-color: rgba(15, 23, 42, 0.75) !important; 
+            border-radius: 12px;
+            padding: 2% 5%;
+            box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+        /* Forzar color blanco puro y sombra oscura en TODOS los textos (Pestañas, Checkboxes, Etiquetas) */
+        div[data-testid="stForm"] label, div[data-testid="stForm"] p, div[data-testid="stForm"] span, div[data-testid="stTabs"] p, div[data-testid="stTabs"] span, div[data-testid="stTabs"] label {{
+            color: #ffffff !important;
+            text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
+            font-weight: 500 !important;
+        }}
+        /* Proteger los campos de input para que el texto tipiado siga siendo oscuro y legible, y blanco si la app esta oscurecida globalmente */
+        input, select, textarea {{
+            color: #ffffff !important;
+            text-shadow: none !important;
+        }}
+
+        /* ALERTAS (ST.INFO / ST.SUCCESS) Y BOTONES */
+        [data-testid="stAlert"] * {{
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important; /* Fuerza de lectura extrema */
+        }}
+        button[kind="primary"] {{
+            background-color: rgba(255, 75, 75, 0.5) !important; /* Rojo puro pero translúcido (Glassmorphism) */
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            color: #ffffff !important;
+        }}
+        button[kind="primary"]:hover {{
+            background-color: rgba(255, 75, 75, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        }}
+        button[kind="secondary"] {{
+            background-color: rgba(15, 23, 42, 0.6) !important; /* Apagar el blanco quemado por defecto */
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            color: #ffffff !important;
+        }}
+        button[kind="secondary"]:hover {{
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+            color: #ffffff !important;
+        }}
+        
+        /* ETIQUETAS DE SELECTBOX Y RADIO BUTTONS: BLANCO EXTREMO PARA MAXIMA DESTAQUE */
+        [data-testid="stRadio"] label p, 
+        [data-testid="stSelectbox"] label p,
+        div[role="radiogroup"] label div {{
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.9) !important;
+        }}
+        
+        /* EXPANDERS (MANTENER TRANSPARENCIA AL BRIRLOS Y NO PONERSE BLANCOS) */
+        [data-testid="stExpander"] details, 
+        [data-testid="stExpander"] summary {{
+            background-color: rgba(15, 23, 42, 0.2) !important;
+            border-radius: 8px !important;
+            color: #ffffff !important;
+        }}
+        [data-testid="stExpander"] {{
+            border: 1px solid rgba(255,255,255, 0.15) !important;
+            background-color: transparent !important;
+        }}
+        div[data-testid="stExpanderDetails"] {{
+            background-color: transparent !important;
+        }}
+        
+        /* RESTAURACIÓN DEL MOTOR DE ÍCONOS DE STREAMLIT (MATERIAL SYMBOLS) */
+        /* Al forzar 'Inter', rompimos las flechas del menú y los expanders. Esto lo repara: */
+        span[class*="material-symbols-rounded"], 
+        .stIcon, 
+        i[class*="icon"],
+        [class*="streamlit-expander-icon"] {{
+            font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+            font-style: normal !important;
+            font-variant: normal !important;
+            text-transform: none !important;
+            line-height: 1 !important;
+        }}
+        
+        /* CORREGIR CONTRASTE DE LOS DESPLEGABLES (MULTISELECTS, SELECTBOXES) */
+        div[data-baseweb="select"] > div {{
+            background-color: #ffffff !important; 
+            color: #000000 !important;
+        }}
+        div[data-baseweb="select"] span {{
+            color: #000000 !important; 
+        }}
+        
+        /* POPUPS Y MENUS DESPLEGABLES (UL, LI, POPOVER) */
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        div[data-baseweb="popover"] ul,
+        div[data-basename="popover"],
+        ul[role="listbox"] {{
+            background-color: #ffffff !important;
+        }}
+        
+        li[role="option"] {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }}
+        
+        li[role="option"] span, 
+        li[role="option"] div, 
+        li[role="option"] p, 
+        li[role="option"] label {{
+            color: #000000 !important;
+        }}
+        
+        li[role="option"]:hover, 
+        li[role="option"][aria-selected="true"] {{
+            background-color: #f1f5f9 !important;
+        }}
+        
+        /* Píldoras elegidas en múltiple selección */
+        span[data-baseweb="tag"] {{
+            background-color: #1e3a8a !important;
+        }}
+        span[data-baseweb="tag"] * {{
+            color: #ffffff !important; /* Fuerza el blanco de vuelta DENTRO de la píldora azul */
+        }}
+        
+        footer {{visibility: hidden;}}
+        </style>
+    """, unsafe_allow_html=True)
+
+MESES_ORDEN = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
+MESES_MAP = {i+1: m for i, m in enumerate(MESES_ORDEN)}
+
+def robust_date_parse(serie_fechas):
+    is_num = pd.to_numeric(serie_fechas, errors='coerce')
+    # Protegido estrictamente contra OutOfBoundsDatetime (Pandas crashea de raíz con values > 80000 o muy ridículos al calcular desde 1899)
+    mask_excel = is_num.notna() & (is_num > 30000) & (is_num < 80000)
+    
+    fechas_dt = pd.Series(pd.NaT, index=serie_fechas.index, dtype='datetime64[ns]')
+    if mask_excel.any():
+        # Forzar un errors='coerce' extra para seguridad absoluta
+        fechas_dt[mask_excel] = pd.to_datetime(is_num[mask_excel], unit='D', origin='1899-12-30', errors='coerce')
+        
+    mask_str = ~mask_excel & serie_fechas.notna()
+    if mask_str.any():
+        s_str = serie_fechas[mask_str].astype(str).str.strip()
+        
+        # 1. Blindaje ISO 8601: Evitar que Pandas voltee los meses en los strings YYYY-MM-DD bajados de Google Sheets
+        fechas_iso = pd.to_datetime(s_str, format='%Y-%m-%d', errors='coerce')
+        
+        # 2. Las que fallaron, seguro son Excel del usuario en DD/MM/YYYY, les forzamos dayfirst
+        mask_falla_iso = fechas_iso.isna()
+        if mask_falla_iso.any():
+            fechas_iso[mask_falla_iso] = pd.to_datetime(s_str[mask_falla_iso], errors='coerce', dayfirst=True)
+            
+        # 3. Fallback genérico para mutantes sin formato
+        mask_todavia = fechas_iso.isna()
+        if mask_todavia.any():
+            fechas_iso[mask_todavia] = pd.to_datetime(s_str[mask_todavia], errors='coerce')
+            
+        fechas_dt[mask_str] = fechas_iso
+            
+    return fechas_dt
+
+def normalize_id_col(val):
+    s = str(val).strip().upper()
+    if s.endswith('.0'): s = s[:-2]
+    if s in ['NAN', 'NAT', 'NONE', '']: return 'S/D'
+    return s
+
+# ==========================================
+# 🔐 GESTIÓN DE DATOS (HIGH PERFORMANCE)
+# ==========================================
+def get_gsheet_client():
+    creds = Credentials.from_service_account_info(st.secrets["gsheets_creds"], 
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
+    return gspread.authorize(creds)
+
+from supabase import create_client, Client
+
+@st.cache_data(ttl=300, show_spinner="Descargando Bóveda Central (Supabase)...")
+def load_data():
+    try:
+        # Usar secrets de Streamlit si existen, sino usar las claves directamente
+        url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+        key = st.secrets.get("SUPABASE_KEY", "CLAVE_OCULTA_POR_SEGURIDAD")
+        supabase: Client = create_client(url, key)
+        
+        response = supabase.table("despachos_inercia").select("*").execute()
+        data_raw = response.data
+        
+        if not data_raw:
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(data_raw)
+            
+        df.columns = df.columns.astype(str).str.strip().str.lower()
+        
+        if not df.empty:
+            if 'fecha_dt' in df.columns:
+                df['fecha_dt'] = pd.to_datetime(df['fecha_dt'], errors='coerce')
+            elif 'fecha' in df.columns:
+                df['fecha_dt'] = robust_date_parse(df['fecha'])
+            else:
+                df['fecha_dt'] = pd.NaT
+                
+            df['anio'] = df['fecha_dt'].dt.year.fillna(0).astype(int)
+            df['mes'] = df['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
+            
+            # Asegurar conversiones numéricas
+            for col in ["volumen", "precio", "venta_total"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+                else:
+                    df[col] = 0.0
+            
+            # Prevenir colapsos si no vienen las columnas
+            for c in ['proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'id_unique', 'bandera', 'detalle']:
+                if c not in df.columns: df[c] = "S/D"
+                else: df[c] = df[c].fillna("S/D")
+                
+            # Identidad robusta ya viene calculada desde ETL, asegurar unicidad
+            if 'id_unique' in df.columns:
+                df = df.drop_duplicates(subset=['id_unique'])
+        else:
+            # Asegurar todas las columnas requeridas para evitar KeyErrors
+            df = pd.DataFrame(columns=[
+                'id_unique', 'anio', 'mes', 'precio', 'volumen', 'venta_total', 'numero', 'codigo', 'detalle', 'formulario', 
+                'fecha', 'cliente', 'condicion', 'codigocom', 'nombre', 'localidad', 'provincia', 'canal', 'categoria', 
+                'canal_com', 'cod_activ', 'cod_canal', 'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 
+                'tipo_comb', 'subti_comb', 'domicilio', 'c_postal', 'proveedor', 'bandera'
+            ])
+        return df
+    except Exception as e: 
+        import traceback
+        st.error(f"Error mortal leyendo la base de Supabase: {e}")
+        st.error(traceback.format_exc())
+        return pd.DataFrame(columns=[
+                'id_unique', 'anio', 'mes', 'precio', 'volumen', 'venta_total', 'numero', 'codigo', 'detalle', 'formulario', 
+                'fecha', 'cliente', 'condicion', 'codigocom', 'nombre', 'localidad', 'provincia', 'canal', 'categoria', 
+                'canal_com', 'cod_activ', 'cod_canal', 'color', 'est_comerc', 'km', 'ramo', 'reventa', 'rubro', 'subrubro', 
+                'tipo_comb', 'subti_comb', 'domicilio', 'c_postal', 'proveedor', 'bandera'
+            ])
+
+def save_to_google_sheets(df_to_save, mode='full'):
+    try:
+        client = get_gsheet_client()
+        sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
+        
+        # El archivo usa la nomenclatura original del excel nativamente
+        df_export = df_to_save.copy()
+        
+        if 'fecha_dt' in df_export.columns:
+            # Pedido expreso del usuario: Visualizar DD/MM/YYYY puramente en Google Sheets
+            df_export['fecha'] = df_export['fecha_dt'].dt.strftime('%d/%m/%Y')
+            
+        headers = list(df_export.columns)
+        
+        df_final = df_export.copy()
+        for col in headers:
+            if col not in df_final.columns:
+                df_final[col] = "S/D"
+        df_final = df_final[headers]
+        
+        data_to_upload = df_final.fillna("S/D").astype(str).values.tolist()
+        
+        if mode == 'full':
+            sheet.clear()
+            data_to_upload = [headers] + data_to_upload
+            sheet.append_rows(data_to_upload, value_input_option='USER_ENTERED')
+        else:
+            sheet.append_rows(data_to_upload, value_input_option='USER_ENTERED')
+            
+        return True
+    except Exception as e: 
+        import streamlit as st
+        st.error(f"Error técnico de Base de Datos: {e}")
+        return False
+
+# --- PASARELA DE AUTENTICACION (RBAC) ---
+def check_login():
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.user_perms = {}
+
+    if not st.session_state.logged_in:
+        with st.container():
+            st.markdown("<br><br><h2 style='text-align: center;'>🔐 Acceso Clasificado</h2>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                with st.form("login_form"):
+                    usr = st.text_input("Usuario o Email")
+                    pwd = st.text_input("Contraseña", type="password")
+                    submit = st.form_submit_button("Autorizar Conexión", type="primary", use_container_width=True)
+                    
+                    if submit:
+                        try:
+                            # Conectar a Supabase para el Login
+                            url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+                            key = st.secrets.get("SUPABASE_KEY", "CLAVE_OCULTA_POR_SEGURIDAD")
+                            supabase: Client = create_client(url, key)
+                            
+                            response = supabase.table("usuarios").select("*").execute()
+                            users_data = response.data
+                            
+                            found = False
+                            for row in users_data:
+                                # Normalización extrema: convierte todas las claves (nombres de columnas) a minúsculas sin espacios
+                                r_norm = {str(k).strip().lower(): v for k, v in row.items()}
+                                
+                                user_val = str(r_norm.get('usuario', '')).strip().lower()
+                                mail_val = str(r_norm.get('mails', r_norm.get('mail', r_norm.get('email', r_norm.get('correo', ''))))).strip().lower()
+                                pwd_val = str(r_norm.get('password', r_norm.get('clave', r_norm.get('contraseña', '')))).strip()
+
+                                if (usr.strip().lower() in [user_val, mail_val] and usr.strip() != "") and (pwd == pwd_val):
+                                    found = True
+                                    st.session_state.user_perms = {
+                                        "ingesta": str(r_norm.get('ingesta', '')).strip().lower(),
+                                        "vision": str(r_norm.get('vision', '')).strip().lower(),
+                                        "inercia": str(r_norm.get('inercia', '')).strip().lower(),
+                                        "mercado": str(r_norm.get('mercado', '')).strip().lower(),
+                                        "copiloto": str(r_norm.get('copiloto', '')).strip().lower(),
+                                        "vs_mercado": str(r_norm.get('vs_mercado', '')).strip().lower(),
+                                        "datos": str(r_norm.get('datos', '')).strip().lower(),
+                                        "admin": str(r_norm.get('admin', '')).strip().lower(),
+                                        "can_config": str(r_norm.get('can_config', '')).strip().lower()
+                                    }
+                                    st.session_state.logged_in = True
+                                    st.rerun()
+                                    
+                            if not found:
+                                st.error("❌ Credenciales incorrectas o usuario inexistente.")
+                                with st.expander("🛠️ Diagnóstico de Seguridad (Dev)", expanded=True):
+                                    st.warning(f"Intentaste acceder con el texto exacto: '{usr}'")
+                                    st.write("Tu tabla de Usuarios en Supabase dice exactamente esto:")
+                                    for idx_r, r in enumerate(users_data):
+                                        st.code(str(r), language="json")
+                        except Exception as e:
+                            st.error(f"Error conectando a la base de datos de usuarios (Supabase): {e}")
+        st.stop() # CORTAFUEGOS: Bloquea la app entera si no hay login.
+
+check_login()
+
+# --- CARGA ---
+if 'df_master' not in st.session_state:
+    st.session_state.df_master = load_data()
+
+df_master = st.session_state.df_master
+
+# ==========================================
+# 🖥️ FILTROS SIDEBAR
+# ==========================================
+st.sidebar.header("🕹️ Centro de Control")
+if st.sidebar.button("🔄 Refrescar"): 
+    st.cache_data.clear()
+    st.session_state.df_master = load_data()
+    st.rerun()
+
+# Filtros Estáticos y Rango de Fechas
+st.sidebar.markdown("### 📅 Filtro Temporal")
+
+# Rango de fechas predefinido
+# Anclamos "Hoy" al máximo registro real del dataset para evitar vacíos si el reloj del server está adelantado a la data.
+hoy_server = date.today()
+hoy = df_master['fecha_dt'].max().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].max()) else hoy_server
+if hoy > hoy_server: hoy = hoy_server # Cap límite
+presets = ["Todo Histórico", "Hoy", "Este Mes", "Mes Anterior", "Este Año", "Personalizado"]
+rango_sel = st.sidebar.selectbox("Período Rápido", presets)
+
+fecha_inicio = None
+fecha_fin = None
+
+if rango_sel == "Hoy":
+    fecha_inicio = fecha_fin = hoy
+elif rango_sel == "Este Mes":
+    fecha_inicio = hoy.replace(day=1)
+    fecha_fin = hoy
+elif rango_sel == "Mes Anterior":
+    primer_dia_mes_actual = hoy.replace(day=1)
+    fecha_fin = primer_dia_mes_actual - timedelta(days=1)
+    fecha_inicio = fecha_fin.replace(day=1)
+elif rango_sel == "Este Año":
+    fecha_inicio = hoy.replace(month=1, day=1)
+    fecha_fin = hoy
+elif rango_sel == "Personalizado":
+    # Asignamos límites min y max basados en el dataframe si es posible
+    min_date = df_master['fecha_dt'].min().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].min()) else hoy - timedelta(days=365)
+    max_date = df_master['fecha_dt'].max().date() if not df_master.empty and pd.notna(df_master['fecha_dt'].max()) else hoy
+    
+    dates = st.sidebar.date_input("Seleccionar Rango", [min_date, max_date])
+    if len(dates) == 2:
+        fecha_inicio, fecha_fin = dates
+    elif len(dates) == 1:
+        fecha_inicio = fecha_fin = dates[0]
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🏷️ Filtros Operativos")
+def get_list(col): return [] if df_master.empty or col not in df_master.columns else sorted([str(x) for x in df_master[col].unique() if pd.notna(x) and str(x) not in ["S/D", "nan"]])
+
+sel_prov = st.sidebar.multiselect("Provincia", get_list('provincia'))
+sel_loc = st.sidebar.multiselect("Localidad", get_list('localidad'))
+sel_sub = st.sidebar.multiselect("Subtipo Combustible", get_list('subti_comb'))
+
+dff = df_master.copy()
+
+# Aplicar Filtro Temporal
+if fecha_inicio and fecha_fin and not dff.empty and 'fecha_dt' in dff.columns:
+    # Convertimos inicio y fin a datetime para la comparación
+    start_dt = pd.to_datetime(fecha_inicio)
+    end_dt = pd.to_datetime(fecha_fin) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1) # Incluir el final del día
+    dff = dff[(dff['fecha_dt'] >= start_dt) & (dff['fecha_dt'] <= end_dt)]
+
+# Aplicar Filtros Operativos
+if sel_prov: dff = dff[dff['provincia'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_prov])]
+if sel_loc:  dff = dff[dff['localidad'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_loc])]
+if sel_sub:  dff = dff[dff['subti_comb'].astype(str).str.strip().str.upper().isin([str(x).strip().upper() for x in sel_sub])]
+
+vol_tot_global = dff['volumen'].sum() if not dff.empty else 0
+cli_tot_global = dff['nombre'].nunique() if not dff.empty else 0
+
+# ==========================================
+# 🏗️ ENRUTADOR PRINCIPAL (LANDING HUB)
+# ==========================================
+if 'app_page' not in st.session_state:
+    st.session_state.app_page = "🌐 HUB PRINCIPAL"
+
+def go_to(page):
+    st.session_state.app_page = page
+
+# Selector Visual Lateral
+st.sidebar.markdown("---")
+# Generación dinámica del menú basado en RBAC
+perms = st.session_state.get('user_perms', {})
+all_pages = ["🌐 HUB PRINCIPAL"]
+if perms.get('ingesta') == 'si': all_pages.append("🚀 INGESTA & CARGA")
+if perms.get('vision') == 'si': all_pages.append("🏠 VISIÓN EJECUTIVA")
+if perms.get('inercia') == 'si': all_pages.append("📈 INERCIA TEMPORAL")
+if perms.get('mercado') == 'si': all_pages.append("🍩 PODER DE MERCADO")
+if perms.get('copiloto') == 'si': all_pages.append("🧠 COPILOTO ESTRATÉGICO")
+if perms.get('vs_mercado') == 'si': all_pages.append("⚔️ MI EMPRESA VS EL RESTO")
+if perms.get('datos') == 'si': all_pages.append("📊 ANÁLISIS DE DATOS PUROS")
+if perms.get('admin') == 'si': all_pages.append("👥 GESTIÓN DE PERSONAL")
+if perms.get('can_config') == 'si': all_pages.append("⚙️ CONFIGURACIÓN")
+
+page_idx = all_pages.index(st.session_state.app_page) if st.session_state.app_page in all_pages else 0
+
+selected_page = st.sidebar.radio("Navegación Nivel Dios", all_pages, index=page_idx)
+
+# Si el usuario hace click manual en el radio, sincronizamos el state
+if selected_page != st.session_state.app_page:
+    st.session_state.app_page = selected_page
+    st.rerun()
+
+app_page = st.session_state.app_page
+
+# --- TABLA DE ENRUTAMIENTO (ESTADO) ---
+if app_page == "🌐 HUB PRINCIPAL":
+    st.markdown(MAIN_TITLE_HTML, unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 1.2rem; margin-bottom: 3rem;'>Selecciona un módulo operativo para comenzar el análisis.</p>", unsafe_allow_html=True)
+    
+    # Diseñamos Botoneras Gigantes Dinámicas (solo se ven los autorizados, empaquetados a la izquierda)
+    modulos = []
+    
+    if perms.get('ingesta') == 'si':
+        modulos.append({"title": "### 🚀 Ingesta de Datos\nSube los crudos y consolida el backend.", "btn": "Ir a Ingesta", "target": "🚀 INGESTA & CARGA", "style": st.info})
+    if perms.get('vision') == 'si':
+        modulos.append({"title": "### 🏠 Visión Ejecutiva\nKPIs resumidos, Grid y mandos.", "btn": "Ir a Visión", "target": "🏠 VISIÓN EJECUTIVA", "style": st.success})
+    if perms.get('inercia') == 'si':
+        modulos.append({"title": "### 📈 Inercia Temporal\nCiclos y empuje por volúmenes.", "btn": "Ir a Inercia", "target": "📈 INERCIA TEMPORAL", "style": st.warning})
+    if perms.get('mercado') == 'si':
+        modulos.append({"title": "### 🍩 Poder de Mercado\nDominancia Zonal, Share y Estrategia.", "btn": "Ir a Mercado", "target": "🍩 PODER DE MERCADO", "style": st.error})
+    if perms.get('copiloto') == 'si':
+        modulos.append({"title": "### 🧠 Copiloto Inteligente\nMotor predictivo AI y auditorías.", "btn": "Ir a Copiloto", "target": "🧠 COPILOTO ESTRATÉGICO", "style": st.info})
+    if perms.get('vs_mercado') == 'si':
+        modulos.append({"title": "### ⚔️ Mi Empresa VS El Resto\nIA Estratégica con Gemini y Benchmarking.", "btn": "Ir a Consultor IA", "target": "⚔️ MI EMPRESA VS EL RESTO", "style": st.info})
+    if perms.get('datos') == 'si':
+        modulos.append({"title": "### 📊 Datos Puros\nTablas estáticas y exportaciones crudas.", "btn": "Ir a Datos Puros", "target": "📊 ANÁLISIS DE DATOS PUROS", "style": st.success})
+    if perms.get('admin') == 'si':
+        modulos.append({"title": "### 👥 Gestión de Personal\nAdministrar usuarios y permisos.", "btn": "Ir a Administración", "target": "👥 GESTIÓN DE PERSONAL", "style": st.error})
+    if perms.get('can_config') == 'si':
+        modulos.append({"title": "### ⚙️ Configuración del Sist.\nParámetros del Motor ETL y Visuales.", "btn": "Ir a Configuración", "target": "⚙️ CONFIGURACIÓN", "style": st.warning})
+        
+    if not modulos:
+        st.error("⚠️ Acceso Restringido: No tienes permisos asignados a ningún módulo. Contacta al administrador para que agregue un 'si' en tus columnas.")
+    else:
+        # Renderizamos iterando en filas de hasta 3 columnas
+        for idx in range(0, len(modulos), 3):
+            fila_mods = modulos[idx:idx+3]
+            cols = st.columns(3)
+            for i, mod in enumerate(fila_mods):
+                with cols[i]:
+                    mod["style"](mod["title"])
+                    if st.button(mod["btn"], key=f"btn_{mod['target']}", type="primary", use_container_width=True):
+                        go_to(mod["target"])
+                        st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
+
+# --- TAB 0: CARGA (CON GRISEADO DE BOTÓN) ---
+if app_page == "🚀 INGESTA & CARGA":
+    st.title("Ingesta SiteCombustible Pro")
+    
+    with st.expander("⚠️ Zona de Peligro (Admin)"):
+        st.warning("El borrado manual desde Google Sheets a veces deja rastros ocultos o caché residual que contamina la base de datos (creando duplicados fantasmas con valores 'S/D'). Utiliza este botón para purgar todo y dejarla en 0 matemáticamente.")
+        if st.button("💥 VACIAR BASE DE DATOS COMPLETA", type="primary"):
+            with st.spinner("Purgando base de datos remota..."):
+                client = get_gsheet_client()
+                sheet = client.open_by_key("1nUklyZe4ZDy4KWyz3yTT67w-gE5ysWjvzx7a0aLSrWc").sheet1
+                sheet.clear()
+                cols = ['marca_temporal', 'id_unique', 'proveedor', 'localidad', 'provincia', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'volumen', 'precio', 'venta_total', 'fecha', 'fecha_dt', 'anio', 'mes', 'bandera']
+                sheet.append_row(cols)
+                st.cache_data.clear()
+                st.session_state.df_master = load_data()
+                st.session_state.synced = False
+            st.success("✅ Base de Datos aniquilada y reinstalada de cero. Sube tu archivo Excel.")
+            time.sleep(2)
+            st.rerun()
+            
+    up_file = st.file_uploader("Subir Archivo", type=["xlsx", "csv"])
+    invertir_fechas = st.checkbox("🔄 Invertir Día y Mes Automáticamente (Marcar SÓLO si el archivo tomó los meses al revés, ej: Enero en vez del real Febrero)", value=False)
+    
+    if up_file:
+        file_id = hashlib.md5(up_file.getvalue()).hexdigest()
+        if "last_id" not in st.session_state or st.session_state.last_id != file_id:
+            st.session_state.last_id = file_id; st.session_state.synced = False
+
+        f_name = up_file.name.lower()
+        if 'xls' in f_name: df_new = pd.read_excel(up_file, engine='openpyxl')
+        else: df_new = pd.read_csv(up_file, encoding='latin-1', sep=None, engine='python', on_bad_lines='skip')
+        
+        df_new.columns = df_new.columns.astype(str).str.strip().str.lower()
+        df_new = df_new.rename(columns={
+            'importe': 'venta_total', 'total': 'venta_total', 'ventas': 'venta_total',
+            'nnumero': 'numero', 'cantidad': 'volumen', 'ult_provee': 'proveedor', 'cod_bande': 'bandera'
+        })
+        df_new = df_new.loc[:, ~df_new.columns.duplicated()]
+        
+        # Blindaje: Inyección de columnas que podrían no venir en el Excel (SOLO STRING)
+        for c in ['proveedor', 'localidad', 'provincia', 'domicilio', 'formulario', 'numero', 'codigo', 'nombre', 'subti_comb', 'bandera', 'detalle']:
+            if c not in df_new.columns: df_new[c] = "S/D"
+
+        # Normalización Extremadamente Estricta pre-hashing para eliminar .0 rebeldes de Pandas
+        for c in ['formulario', 'numero', 'codigo', 'nombre', 'detalle']:
+            if c in df_new.columns: df_new[c] = df_new[c].apply(normalize_id_col)
+
+        # Aseguramos columnas numéricas sin S/D de manera segura evitando Null Pointers
+        if "volumen" in df_new.columns:
+            df_new["volumen"] = pd.to_numeric(df_new["volumen"], errors='coerce').fillna(0)
+        else:
+            df_new["volumen"] = 0.0
+            
+        if "precio" in df_new.columns:
+            df_new["precio"] = pd.to_numeric(df_new["precio"], errors='coerce').fillna(0)
+        else:
+            df_new["precio"] = 0.0
+            
+        if "venta_total" in df_new.columns:
+            df_new["venta_total"] = pd.to_numeric(df_new["venta_total"], errors='coerce').fillna(df_new["precio"] * df_new["volumen"])
+        else:
+            df_new["venta_total"] = df_new["precio"] * df_new["volumen"]
+        
+        if 'fecha' in df_new.columns:
+            df_new['fecha_dt'] = robust_date_parse(df_new['fecha'])
+            
+            if invertir_fechas:
+                def swap_dm(d):
+                    if pd.isnull(d): return d
+                    try:
+                        # Geometría inversa forzada
+                        return d.replace(day=d.month, month=d.day)
+                    except ValueError:
+                        return d # Ignora colisiones si día es > 12 (ej 2020-01-25)
+                df_new['fecha_dt'] = df_new['fecha_dt'].apply(swap_dm)
+                
+            df_new['anio'] = df_new['fecha_dt'].dt.year.fillna(0).astype(int)
+            df_new['mes'] = df_new['fecha_dt'].dt.month.fillna(0).astype(int).map(MESES_MAP).fillna("S/D")
+        
+        # Identificador Único Estricto (Regla de Negocio JL: Fecha + Cliente + Producto + Formulario + NNumero)
+        df_new['debug_str'] = df_new.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('numero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+        df_new['id_unique'] = df_new['debug_str'].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
+        
+        # UI DIAGNOSTICO EN VIVO PARA EL USUARIO Y COMPROBACION DE GOOGLE SHEETS
+        master_ids = set(df_master['id_unique']) if not df_master.empty and 'id_unique' in df_master.columns else set()
+        df_new['ACCION_FUTURA'] = df_new['id_unique'].apply(lambda x: "🟢 SE ACTUALIZARÁ (Ya existe en Google Sheet)" if x in master_ids else "🟡 SE INSERTARÁ (Fila TOTALMENTE NUEVA)")
+        
+        bug_rows = df_new[df_new['numero'].astype(str).str.contains('1000019524', na=False)]
+        if not bug_rows.empty:
+            with st.expander("🚨 ESCÁNER FORENSE DEFINITIVO: Análisis del NNumero 1000019524", expanded=True):
+                st.error("JL: Tienes razón. La caja verde me confunde. Si te dice 'INSERTARÁ', es porque cree que no existe. Busquemos en vivo a esta bestia directamente adentro del Google Sheets que tengo en Memoria Ram:")
+                
+                master_bug = df_master[df_master['numero'].astype(str).str.contains('1000019524', na=False)].copy()
+                if not master_bug.empty:
+                    master_bug['debug_str'] = master_bug.apply(lambda r: f"{str(r.get('fecha_dt'))[:10]}_{str(r.get('formulario'))}_{str(r.get('numero'))}_{str(r.get('codigo'))}_{str(r.get('nombre'))}", axis=1)
+                
+                c1, c2 = st.columns(2)
+                cols_to_show = ['id_unique', 'debug_str', 'codigo', 'volumen']
+                
+                with c1:
+                    st.warning("📥 CÓMO SE LEE EN EL EXCEL NUEVO:")
+                    st.dataframe(bug_rows[[c for c in cols_to_show if c in bug_rows.columns]])
+                    
+                with c2:
+                    st.info("☁️ CÓMO ESTÁ VIVIENDO AHORA MISMO EN GOOGLE SHEETS:")
+                    if not master_bug.empty:
+                        st.dataframe(master_bug[[c for c in cols_to_show if c in master_bug.columns]])
+                    else:
+                        st.error("🚨 ¡ATENCIÓN! La factura 1000019524 NO ESTÁ en el Google Sheets en este momento. El sistema la va a insertar por primera vez. (¿Quizás bajaste un PDF de visualización y asumiste que estaba en la base?).")
+
+                
+        # LOGICA DE UPSERT (Full Sync)
+        # Combinamos la base vieja con el excel nuevo, eliminamos duplicados quedándonos con la versión del excel nuevo (last)
+        df_merged = pd.concat([df_master, df_new]).drop_duplicates(subset=['id_unique'], keep='last')
+        
+        nuevos_reales = len(df_merged) - len(df_master)
+        actualizados = len(df_new) - nuevos_reales
+        
+        if len(df_new) > 0:
+            st.success(f"✅ Análisis completado: Se insertarán {nuevos_reales} fila(s) nueva(s) y se actualizarán {actualizados} fila(s) existente(s).")
+            
+            with st.expander("🕵️ Auditoría de Fechas Internas (Verificar Lectura)", expanded=True):
+                st.info("Revisa esta tabla para confirmar que Pandas reconoció correctamente 'Enero' y 'Febrero'. Si ves 'NaT', el formato de Excel no es compatible con el estándar DD/MM/YYYY.")
+                cols_check = [c for c in ['fecha', 'fecha_dt', 'anio', 'mes'] if c in df_new.columns]
+                df_audit = df_new[cols_check].head(50).copy()
+                if 'fecha_dt' in df_audit.columns: df_audit['fecha_dt'] = df_audit['fecha_dt'].dt.strftime('%d/%m/%Y')
+                st.dataframe(df_audit.astype(str))
+                st.dataframe(df_audit.astype(str))
+            
+            if len(df_master) == 0 and actualizados > 0:
+                with st.expander(f"⚙️ Auditoría de Colisiones ({actualizados} Repetidas en tu Archivo)"):
+                    st.warning("El motor matemático agrupó estas filas. Compara de a pares: verás que comparten EXACTAMENTE Fecha, Formulario, NNumero, Código y Nombre de Cliente. Como la regla de negocio es estricta, se conservó sólo una.")
+                    dups = df_new[df_new.duplicated(subset=['id_unique'], keep=False)].sort_values('id_unique')
+                    cols_dup = [c for c in ['fecha_dt', 'formulario', 'numero', 'codigo', 'nombre', 'volumen'] if c in dups.columns]
+                    df_dups = dups[cols_dup].head(100).copy()
+                    if 'fecha_dt' in df_dups.columns: df_dups['fecha_dt'] = df_dups['fecha_dt'].dt.strftime('%d/%m/%Y')
+                    st.dataframe(df_dups.astype(str))
+            
+            
+            label = "✅ Sincronizado (Upsert Total)" if st.session_state.synced else "🚀 Confirmar Sincronización Total (Full Sync)"
+            if st.button(label, disabled=st.session_state.synced):
+                with st.spinner(f"Planchando y reescribiendo la Base de Datos con {len(df_merged)} registros (tarda unos 5 seg)..."):
+                    if save_to_google_sheets(df_merged, mode='full'):
+                        st.session_state.synced = True; st.cache_data.clear()
+                        st.session_state.df_master = load_data()
+                        st.balloons(); time.sleep(1); st.rerun()
+        else: st.warning("⚠️ El archivo subido está vacío.")
+
+# --- TAB 1: DASHBOARD EJECUTIVO ---
+if app_page == "🏠 VISIÓN EJECUTIVA":
+    if not dff.empty:
+        if TABLEROS.get("vis_kpi", True):
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Volumen Bruto (Total)", f"{vol_tot_global:,.0f}")
+            k2.metric("Clientes Activos", cli_tot_global)
+            k3.metric("Ventas Est. ($)", f"$ {dff['venta_total'].sum():,.0f}")
+        
+        if TABLEROS.get("vis_mapa", True):
+            st.subheader("📍 Concentración Geográfica (Mapa de Sensibilidad)")
+        
+        # Siempre calculamos ag_map porque la grilla también lo usa
+        ag_map = dff.groupby(["localidad", "provincia"]).agg(vol=("volumen", "sum"), cli=("nombre", "nunique")).reset_index()
+        def calc_score(r):
+            s = ((r['vol'] / vol_tot_global) * 70) + ((r['cli'] / cli_tot_global) * 30)
+            n = "Alta" if s >= 5.0 else "Media" if s >= 1.5 else "Baja"
+            return s, n
+        calc = ag_map.apply(calc_score, axis=1)
+        ag_map['Score'], ag_map['Nivel'] = calc.apply(lambda x: x[0]), calc.apply(lambda x: x[1])
+
+        import time
+        # Diccionario In-Memory para velocidad extrema (TOP Localidades de Argentina)
+        CACHE_DIRECTO_ARG = {
+            "cordoba, cordoba": (-31.4167, -64.1833),
+            "rosario, santa fe": (-32.9468, -60.6393),
+            "mendoza, mendoza": (-32.8908, -68.8272),
+            "san miguel de tucuman, tucuman": (-26.8300, -65.2038),
+            "la plata, buenos aires": (-34.9214, -57.9545),
+            "mar del plata, buenos aires": (-38.0004, -57.5562),
+            "salta, salta": (-24.7821, -65.4232),
+            "santa fe, santa fe": (-31.6215, -60.6973),
+            "san juan, san juan": (-31.5375, -68.5364),
+            "resistencia, chaco": (-27.4606, -58.9839),
+            "neuquen, neuquen": (-38.9516, -68.0592),
+            "formosa, formosa": (-26.1775, -58.1781),
+            "santiago del estero, santiago del estero": (-27.7833, -64.2667),
+            "corrientes, corrientes": (-27.4806, -58.8341),
+            "san salvador de jujuy, jujuy": (-24.1856, -65.2979),
+            "caba, ciudad autonoma de buenos aires": (-34.6037, -58.3816),
+            "caba, buenos aires": (-34.6037, -58.3816),
+            "bahia blanca, buenos aires": (-38.7183, -62.2663),
+            "parana, entre rios": (-31.7333, -60.5333)
+        }
+
+        @st.cache_data(show_spinner=False)
+        def geocode_cached(localidad, provincia):
+            key = f"{localidad}, {provincia}".lower().strip()
+            if key in CACHE_DIRECTO_ARG:
+                return {"lat": CACHE_DIRECTO_ARG[key][0], "lon": CACHE_DIRECTO_ARG[key][1]}
+            
+            try:
+                time.sleep(1.05) 
+                geolocator = Nominatim(user_agent="sitecomb_vfinal_vmax")
+                res = geolocator.geocode(f"{localidad}, {provincia}, Argentina")
+                if res: return {"lat": res.latitude, "lon": res.longitude}
+            except: pass
+            return None
+
+        if TABLEROS.get("vis_mapa", True):
+            # Expander a lo ancho de TODA la pantalla
+            with st.expander("🗺️ Ver Mapa de Calor Geográfico (Motor Ultra-Rápido)", expanded=False):
+                st.info("💡 Renderizado acelerado por inyección en Memoria Caché de RAM (Latencia esperada: 0.05 segundos).")
+                if st.button("🚀 Renderizar Mapa Avanzado", key="btn_render_mapa"):
+                    with st.spinner("Levantando plano interactivo responsivo..."):
+                        
+                        top_locs = ag_map.sort_values("vol", ascending=False).head(35)
+                        
+                        # Se cambió el tile a 'OpenStreetMap' para mostrar el mapa político de Argentina
+                        m = folium.Map(location=[-35.4, -63.6], zoom_start=5, tiles='OpenStreetMap')
+                        m_data = []
+                        
+                        for _, r in top_locs.iterrows():
+                            coords = geocode_cached(r['localidad'], r['provincia'])
+                            if coords:
+                                lat, lon, score = coords['lat'], coords['lon'], r['Score']
+                                m_data.append([lat, lon, score])
+                                
+                                # Obtener datos de clientes de esa localidad
+                                loc_df = dff[(dff['localidad'] == r['localidad']) & (dff['provincia'] == r['provincia'])]
+                                top_clientes = loc_df.groupby('nombre')['volumen'].sum().sort_values(ascending=False).head(15)
+                                
+                                html_clientes = "<br><hr style='margin: 8px 0;'><b style='font-size:0.95em; color:#0ea5e9;'>Top Clientes en la Zona:</b><ul style='margin-top: 5px; margin-bottom: 5px; padding-left: 20px; font-size: 0.85em;'>"
+                                for cliente, v_cliente in top_clientes.items():
+                                    if pd.notna(cliente) and str(cliente).strip() not in ["S/D", "", "nan", "None"]:
+                                        nombre_corto = str(cliente)[:25] + "..." if len(str(cliente)) > 25 else str(cliente)
+                                        html_clientes += f"<li style='margin-bottom: 3px;'><b>{nombre_corto}</b>: {v_cliente:,.0f} L</li>"
+                                html_clientes += "</ul>"
+                                
+                                color_mk = "#ef4444" if score >= 5.0 else ("#eab308" if score >= 1.5 else "#3b82f6")
+                                folium.CircleMarker(
+                                    location=[lat, lon],
+                                    radius=max(5, min(score * 2.5, 20)), # Un poco más grandes para facilitar click
+                                    popup=folium.Popup(f"<div style='min-width: 260px; max-height: 300px; overflow-y: auto; font-family: sans-serif;'><b>{r['localidad']} ({r['provincia']})</b><br><br>Volumen Zona: <b>{r['vol']:,.0f} L</b><br>Score Riesgo/Centralidad: <b>{score:.1f}</b>{html_clientes}</div>", max_width=350),
+                                    tooltip=f"Ver Clientes en {r['localidad']}",
+                                    color=color_mk,
+                                    fill=True,
+                                    fill_color=color_mk,
+                                    fill_opacity=0.8,
+                                    weight=1
+                                ).add_to(m)
+                                
+                        if m_data: 
+                            HeatMap(m_data, radius=35, blur=25, min_opacity=0.4, gradient={0.2: '#0ea5e9', 0.6: '#eab308', 1.0: '#ef4444'}).add_to(m) 
+                        
+                        st_folium(m, use_container_width=True, height=550, returned_objects=[])
+        
+        st.subheader("🚦 Grilla Estratégica (Análisis de Mercado)")
+        grid = ag_map.sort_values("Score", ascending=False)
+        if TABLEROS.get("vis_grilla", True):
+            st.dataframe(grid.style.map(lambda v: 'background-color: #fee2e2' if v=='Alta' else ('background-color: #fef9c3' if v=='Media' else 'background-color: #dcfce7'), subset=['Nivel']), use_container_width=True)
+
+        col_exp_grid, _ = st.columns([1, 2])
+        with col_exp_grid.expander("📥 Exportar Grilla Estratégica", expanded=False):
+            ex_g1, ex_g2 = st.columns(2)
+            fmt_grid = ex_g1.selectbox("Formato", ["PDF", "XLSX"], key="exp_grid_fmt")
+            str_fechas_g = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+            txt_filtros_grid = f"Fechas: {str_fechas_g} | Prov: {sel_prov or 'Todas'}"
+            
+            if fmt_grid == "PDF":
+                btn_pdf_grid = generar_pdf_corporativo(grid.head(50), "Reporte Grilla Estratégica", txt_filtros_grid, "Completo")
+                st.download_button("Descargar Reporte PDF", btn_pdf_grid, "Grilla_Estrategica.pdf", "application/pdf")
+            else:
+                btn_xl_grid = generar_excel_corporativo(grid, "xlsx")
+                st.download_button("Descargar Archivo XLSX", btn_xl_grid, "Grilla_Estrategica.xlsx")
+
+# --- TAB 2: ANÁLISIS DE INERCIA TEMPORAL (MODIFICACIÓN QUIRÚRGICA) ---
+if app_page == "📈 INERCIA TEMPORAL":
+    if not dff.empty:
+        st.subheader("📊 Inercia Temporal de Despacho")
+        
+        # Mando de granularidad sutil
+        v_mode = st.radio("Escala Temporal:", ["Año", "Mes", "Semana"], horizontal=True, key="mando_temporal_v5")
+        
+        df_t = dff.copy().dropna(subset=['fecha_dt'])
+        meses_abrev = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
+        
+        # Definir Límites Matemáticos del Espinazo Temporal (Relleno Continuo de Ceros)
+        t_start = pd.to_datetime(fecha_inicio) if fecha_inicio else df_t['fecha_dt'].min()
+        t_end = pd.to_datetime(fecha_fin) if fecha_fin else df_t['fecha_dt'].max()
+        
+        df_spine = pd.DataFrame()
+        if not pd.isna(t_start) and not pd.isna(t_end):
+            if v_mode == "Semana":
+                spine_keys = pd.Series(pd.date_range(start=t_start, end=t_end, freq='D')).dt.to_period('W').dt.start_time.unique()
+            elif v_mode == "Mes":
+                spine_keys = pd.Series(pd.date_range(start=t_start, end=t_end, freq='D')).dt.to_period('M').dt.start_time.unique()
+            else:
+                spine_keys = list(range(t_start.year, t_end.year + 1))
+            
+            df_spine = pd.DataFrame({'sort_key': spine_keys})
+            
+            if v_mode == "Semana":
+                anios = df_spine['sort_key'].dt.year
+                if anios.nunique() == 1:
+                    df_spine['eje_temporal'] = "S" + df_spine['sort_key'].dt.isocalendar().week.astype(str)
+                else:
+                    df_spine['eje_temporal'] = "S" + df_spine['sort_key'].dt.isocalendar().week.astype(str) + " '" + df_spine['sort_key'].dt.strftime("%y")
+                lbl_eje = "Semana"
+            elif v_mode == "Mes":
+                anios = df_spine['sort_key'].dt.year
+                if anios.nunique() == 1:
+                    df_spine['eje_temporal'] = df_spine['sort_key'].dt.month.map(meses_abrev).astype(str)
+                else:
+                    df_spine['eje_temporal'] = df_spine['sort_key'].dt.month.map(meses_abrev).astype(str) + "-" + df_spine['sort_key'].dt.strftime("%y")
+                lbl_eje = "Mes"
+            else:
+                df_spine['eje_temporal'] = df_spine['sort_key'].astype(str)
+                lbl_eje = "Año"
+        
+        # Mapeo idéntico en el dataset real
+        if v_mode == "Semana":
+            df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('W').dt.start_time
+            if df_t['anio'].nunique() == 1: df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str)
+            else: df_t['eje_temporal'] = "S" + df_t['fecha_dt'].dt.isocalendar().week.astype(str) + " '" + df_t['fecha_dt'].dt.strftime("%y")
+        elif v_mode == "Mes":
+            df_t['sort_key'] = df_t['fecha_dt'].dt.to_period('M').dt.start_time
+            if df_t['anio'].nunique() == 1: df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str)
+            else: df_t['eje_temporal'] = df_t['fecha_dt'].dt.month.map(meses_abrev).astype(str) + "-" + df_t['fecha_dt'].dt.strftime("%y")
+        else:
+            df_t['sort_key'] = df_t['anio'].astype(int)
+            df_t['eje_temporal'] = df_t['anio'].astype(str)
+
+        # Texto de filtros para los reportes
+        str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros = f"Fechas: {str_fechas} | Localidad: {sel_loc or 'Todas'} | Subtipo: {sel_sub or 'Todos'}"
+
+        # --- SECCIÓN 1: VOLUMEN TOTAL (Lógica API NamedAgg + Espinazo Cero) ---
+        st.markdown("#### Evolución del Volumen Total de la Empresa")
+        e_vol_total_raw = df_t.groupby(['sort_key', 'eje_temporal']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+        ).reset_index()
+
+        if not df_spine.empty:
+            e_vol_total = pd.merge(df_spine, e_vol_total_raw, on=['sort_key', 'eje_temporal'], how='left')
+            e_vol_total['volumen'] = e_vol_total['volumen'].fillna(0)
+            e_vol_total['ventas'] = e_vol_total['ventas'].fillna(0)
+        else:
+            e_vol_total = e_vol_total_raw
+            
+        e_vol_total = e_vol_total.sort_values("sort_key")
+
+        if TABLEROS.get("i_total", True):
+            fig1 = px.line(e_vol_total, x='eje_temporal', y='volumen', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje})
+            fig1.update_traces(line_color="#3b82f6", line_width=3, marker=dict(size=8, color="#60a5fa"))
+            fig1.update_layout(height=400, margin=dict(t=20, b=20), hovermode="x unified",
+                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            fig1.update_xaxes(type='category', categoryorder='array', categoryarray=e_vol_total['eje_temporal'].unique(), gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig1.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig1, use_container_width=True)
+
+        # Exportación Sutil (Expander)
+        col_exp1, _ = st.columns([1, 2])
+        with col_exp1.expander("📥 Exportar Reporte de Volumen", expanded=False):
+            ex1, ex2 = st.columns(2)
+            fmt1 = ex1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_1")
+            mod1 = ex2.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_1", horizontal=True)
+            
+            if fmt1 == "PDF":
+                # Llamada segura a la función ahora que está definida arriba
+                btn_data = generar_pdf_corporativo(e_vol_total, "Reporte Inercia Total", txt_filtros, mod1)
+                st.download_button("Descargar Reporte PDF", btn_data, "Inercia_Total.pdf", "application/pdf")
+            else:
+                btn_xl = generar_excel_corporativo(e_vol_total, fmt1.lower())
+                st.download_button(f"Descargar Archivo {fmt1}", btn_xl, f"Inercia_Total.{fmt1.lower()}")
+
+        st.markdown("---")
+
+        # --- SECCIÓN 2: EMPUJE POR PRODUCTO (Lógica API NamedAgg + Producto Cartesiano) ---
+        st.markdown(f"#### Empuje por Producto (Tendencia por {v_mode})")
+        e_sub_raw = df_t.groupby(['sort_key', 'eje_temporal', 'subti_comb']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
+        ).reset_index()
+
+        if not df_spine.empty and not e_sub_raw.empty:
+            subtipos_unicos = e_sub_raw['subti_comb'].unique()
+            spine_cross = df_spine.assign(key=1).merge(pd.DataFrame({'subti_comb': subtipos_unicos, 'key': 1}), on='key').drop('key', axis=1)
+            e_sub = pd.merge(spine_cross, e_sub_raw, on=['sort_key', 'eje_temporal', 'subti_comb'], how='left')
+            e_sub['volumen'] = e_sub['volumen'].fillna(0)
+        else:
+            e_sub = e_sub_raw
+            
+        e_sub = e_sub.sort_values("sort_key")
+
+        if TABLEROS.get("i_prod", True):
+            fig2 = px.line(e_sub, x='eje_temporal', y='volumen', color='subti_comb', markers=True, template="plotly_dark", labels={'eje_temporal': lbl_eje, 'subti_comb': 'Combustible'})
+            fig2.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
+                               paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            cat_order_2 = e_sub[['sort_key', 'eje_temporal']].drop_duplicates().sort_values('sort_key')['eje_temporal']
+            fig2.update_xaxes(type='category', categoryorder='array', categoryarray=cat_order_2, gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig2.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        col_exp2, _ = st.columns([1, 2])
+        with col_exp2.expander("📥 Exportar Reporte de Productos", expanded=False):
+            ex3, ex4 = st.columns(2)
+            fmt2 = ex3.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_2")
+            mod2 = ex4.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_2", horizontal=True)
+            
+            if fmt2 == "PDF":
+                btn_data2 = generar_pdf_corporativo(e_sub, "Reporte Tendencia Productos", txt_filtros, mod2)
+                st.download_button("Descargar PDF ", btn_data2, "Tendencia_Productos.pdf", "application/pdf")
+            else:
+                btn_xl2 = generar_excel_corporativo(e_sub, fmt2.lower())
+                st.download_button(f"Descargar {fmt2} ", btn_xl2, f"Tendencia_Productos.{fmt2.lower()}")
+
+        st.markdown("---")
+
+        st.markdown("#### Dominancia por Zona (Ranking Volumen)")
+        r_prov = dff.groupby(['provincia', 'subti_comb']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
+        ).reset_index()
+        
+        if TABLEROS.get("i_dom", True):
+            fig_prov = px.bar(r_prov, x='provincia', y='volumen', color='subti_comb', template="plotly_dark", labels={'provincia': 'Zona', 'volumen': 'Total', 'subti_comb': 'Combustible'})
+            fig_prov.update_xaxes(categoryorder='total descending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_prov.update_yaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_prov.update_layout(margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_prov, use_container_width=True)
+        
+        col_exp_prov, _ = st.columns([1, 2])
+        with col_exp_prov.expander("📥 Exportar Reporte de Zona", expanded=False):
+            ex_p1, ex_p2 = st.columns(2)
+            fmt_prov = ex_p1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_exp_prov")
+            mod_prov = ex_p2.radio("Contenido", ["Completo", "Solo Datos"], key="m_exp_prov", horizontal=True)
+            
+            if fmt_prov == "PDF":
+                btn_pdf_prov = generar_pdf_corporativo(r_prov, "Reporte Dominancia por Zona", txt_filtros, mod_prov)
+                st.download_button("Descargar Reporte PDF  ", btn_pdf_prov, "Dominancia_Zona.pdf", "application/pdf")
+            else:
+                btn_xl_prov = generar_excel_corporativo(r_prov, fmt_prov.lower())
+                st.download_button(f"Descargar Archivo {fmt_prov}  ", btn_xl_prov, f"Dominancia_Zona.{fmt_prov.lower()}")
+    else:
+        st.warning("⚠️ No se encontraron despachos registrados para este cruce de fechas y filtros operativos.")
+        
+# --- TAB 3: PODER DE MERCADO Y ESTRATEGIA GEOGRÁFICA ---
+if app_page == "🍩 PODER DE MERCADO":
+    if not dff.empty:
+        st.subheader("🏭 Poder de Negociación por Proveedor")
+        
+        # 1. Preparación de datos con lógica NamedAgg (Certificada por API)
+        prov_mix = dff.groupby(['proveedor', 'subti_comb']).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+        ).reset_index()
+
+        str_fechas = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros_t3 = f"Fechas: {str_fechas} | Prov: {sel_prov or 'Todas'} | Sub: {sel_sub or 'Todos'}"
+
+        # --- SECCIÓN 1: MIX POR PROVEEDOR (BARRA HORIZONTAL) ---
+        if TABLEROS.get("m_prov", True):
+            st.markdown("#### Concentración de Volumen por Proveedor")
+            # El mayor volumen siempre arriba para lectura rápida
+            fig_prov_2 = px.bar(
+                prov_mix, 
+                y='proveedor', 
+                x='volumen', 
+                color='subti_comb', 
+                orientation='h', 
+                template="plotly_dark",
+                labels={'proveedor': 'Proveedor', 'volumen': 'Lts', 'subti_comb': 'Combustible'}
+            )
+            # Ordenamos: Mayor volumen ARRIBA de todo
+            fig_prov_2.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+            fig_prov_2.update_layout(height=500, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color='#ffffff', size=13), title=dict(font=dict(color='#ffffff', size=13))),
+                                   paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            fig_prov_2.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_prov_2, use_container_width=True)
+
+        # BLOQUE DE EXPORTACIÓN SUTIL (Expander)
+        col_exp3, _ = st.columns([1, 2])
+        with col_exp3.expander("📥 Exportar Reporte de Proveedores", expanded=False):
+            e_col1, e_col2 = st.columns(2)
+            fmt_t3 = e_col1.selectbox("Formato de Reporte", ["PDF", "XLSX", "XLS"], key="fmt_t3_p1")
+            mod_t3 = e_col2.radio("Nivel de Detalle", ["Completo", "Solo Datos"], key="mod_t3_p1", horizontal=True)
+            
+            if fmt_t3 == "PDF":
+                btn_pdf_t3 = generar_pdf_corporativo(prov_mix, "Reporte Mix por Proveedor", txt_filtros_t3, mod_t3)
+                st.download_button("Descargar Reporte PDF ", btn_pdf_t3, "Mix_Proveedores.pdf", "application/pdf")
+            else:
+                ext_t3 = fmt_t3.lower()
+                btn_xl_t3 = generar_excel_corporativo(prov_mix, ext_t3)
+                st.download_button(f"Descargar Archivo {fmt_t3} ", btn_xl_t3, f"Mix_Proveedores.{ext_t3}")
+
+        st.markdown("---")
+
+        # --- SECCIÓN 2: PARTICIPACIÓN GLOBAL (DONA) ---
+        # Agrupamos solo por subtipo para el gráfico de torta (fuera del if para no romper la exportación)
+        mix_global = dff.groupby('subti_comb').agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum")
+        ).reset_index()
+
+        if TABLEROS.get("m_part", True):
+            st.markdown("#### Participación por Tipo de Producto")
+            fig_pie = px.pie(
+                mix_global, 
+                values='volumen', 
+                names='subti_comb', 
+                hole=0.5,
+                template="plotly_dark",
+                labels={'subti_comb': 'Combustible', 'volumen': 'Lts'},
+                color_discrete_sequence=px.colors.qualitative.Prism
+            )
+            fig_pie.update_traces(textinfo='percent+label', pull=[0.05, 0, 0, 0], marker=dict(line=dict(color='#ffffff', width=1)))
+            fig_pie.update_layout(height=450, margin=dict(t=30, b=30), legend=dict(font=dict(color='#ffffff', size=13), title=dict(text='Combustible', font=dict(color='#ffffff', size=13))), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=14))
+            st.plotly_chart(fig_pie, use_container_width=True)
+
+        st.markdown("---")
+        if TABLEROS.get("m_terr", True):
+            st.markdown("#### Batalla por el Dominio Territorial (Share de Banderas)")
+            if 'bandera' in dff.columns:
+                ag_bandera = dff.groupby(['bandera', 'subti_comb']).agg(volumen=("volumen", "sum")).reset_index()
+                fig_bandera = px.bar(
+                    ag_bandera, y='bandera', x='volumen', color='subti_comb',
+                    orientation='h', template="plotly_dark",
+                    labels={'bandera': 'Marca / Bandera', 'volumen': 'Litros'}
+                )
+                fig_bandera.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+                fig_bandera.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+                fig_bandera.update_layout(height=450, margin=dict(t=20, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1))
+                st.plotly_chart(fig_bandera, use_container_width=True)
+
+        # Exportación sutil para el Mix Global
+        col_exp4, _ = st.columns([1, 2])
+        with col_exp4.expander("📥 Exportar Reporte de Mix Global", expanded=False):
+            e_col3, e_col4 = st.columns(2)
+            fmt_t3_pie = e_col3.selectbox("Formato de Salida", ["PDF", "XLSX"], key="fmt_t3_p2")
+            if fmt_t3_pie == "PDF":
+                btn_pdf_pie = generar_pdf_corporativo(mix_global, "Reporte Mix Global de Productos", txt_filtros_t3, "Completo")
+                st.download_button("Descargar Reporte PDF  ", btn_pdf_pie, "Mix_Global.pdf", "application/pdf")
+            else:
+                btn_xl_pie = generar_excel_corporativo(mix_global, "xlsx")
+                st.download_button("Descargar Archivo XLSX  ", btn_xl_pie, "Mix_Global.xlsx")
+    else:
+        st.warning("⚠️ No hay datos para analizar el Poder de Mercado.")
+
+# --- TAB 4: COPILOTO ESTRATÉGICO ---
+if app_page == "🧠 COPILOTO ESTRATÉGICO":
+    if not dff.empty:
+        st.subheader("🧠 Inteligencia de Negocio & Análisis de Riesgo")
+        
+        # 1. Análisis Dinámico del Velocímetro Comercial (vs Período Anterior equivalente)
+        v_actual = dff['volumen'].sum() if not dff.empty else 0
+        df_master_ref = st.session_state.df_master
+        
+        if fecha_inicio and fecha_fin:
+            # Período definido por el usuario (ej. 7 días, 1 mes, etc.)
+            dias_delta = (pd.to_datetime(fecha_fin) - pd.to_datetime(fecha_inicio)).days + 1
+            f_ant_inicio = pd.to_datetime(fecha_inicio) - pd.Timedelta(days=dias_delta)
+            f_ant_fin = pd.to_datetime(fecha_inicio) - pd.Timedelta(days=1)
+            
+            df_ant = df_master_ref[(df_master_ref['fecha_dt'] >= f_ant_inicio) & (df_master_ref['fecha_dt'] <= f_ant_fin)]
+            v_anterior = df_ant['volumen'].sum() if not df_ant.empty else 0
+            
+            periodo_act = f"{dias_delta} Días"
+            txt_ref = f"{dias_delta} Días Previos"
+        else:
+            # Todo Histórico -> Comparamos el año actual en curso vs el año pasado completo
+            anio_actual = date.today().year
+            v_actual = dff[dff['anio'] == anio_actual]['volumen'].sum()
+            v_anterior = dff[dff['anio'] == anio_actual - 1]['volumen'].sum()
+            periodo_act = f"Año en curso"
+            txt_ref = f"Año Anterior ({anio_actual - 1})"
+            
+        variacion = ((v_actual - v_anterior) / v_anterior) * 100 if v_anterior > 0 else 0
+        
+        if v_actual > 0 or v_anterior > 0:
+            if TABLEROS.get("c_vel", True):
+                # ======= EL "VELOCÍMETRO" (GAUGE CHART) =======
+                st.markdown("#### 🏎️ Tacómetro de Velocidad Comercial")
+                c_gauge, c_txt = st.columns([1.5, 1])
+                
+                with c_gauge:
+                    fig_gauge = go.Figure(go.Indicator(
+                        mode = "gauge+number+delta",
+                        value = v_actual,
+                        domain = {'x': [0, 1], 'y': [0, 1]},
+                        title = {'text': f"Litros Vendidos ({periodo_act})", 'font': {'size': 20, 'color': 'white'}},
+                        delta = {'reference': v_anterior, 'valueformat': ',.0f', 'position': "top", 'increasing': {'color': '#22c55e'}, 'decreasing': {'color': '#ef4444'}},
+                        number = {'valueformat': ',.0f', 'font': {'color': 'white'}},
+                        gauge = {
+                            'axis': {'range': [None, max(v_actual, v_anterior) * 1.5], 'tickwidth': 1, 'tickcolor': "white"},
+                            'bar': {'color': "#3b82f6", 'thickness': 0.25},
+                            'bgcolor': "rgba(0,0,0,0)",
+                            'borderwidth': 2,
+                            'bordercolor': "gray",
+                            'steps': [
+                                {'range': [0, v_anterior * 0.8], 'color': 'rgba(239, 68, 68, 0.4)'}, # Zona Roja
+                                {'range': [v_anterior * 0.8, v_anterior * 1.05], 'color': 'rgba(234, 179, 8, 0.4)'}, # Zona Amarilla
+                                {'range': [v_anterior * 1.05, max(v_actual, v_anterior) * 1.5], 'color': 'rgba(34, 197, 94, 0.4)'} # Zona Verde
+                            ],
+                            'threshold': {
+                                'line': {'color': "white", 'width': 4},
+                                'thickness': 0.75,
+                                'value': v_anterior
+                            }
+                        }
+                    ))
+                    fig_gauge.update_layout(height=350, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color': "white"})
+                    st.plotly_chart(fig_gauge, use_container_width=True)
+    
+                with c_txt:
+                    st.info(f"**Interpretación Gerencial:** Mide tu rendimiento en bloque. Hoy estás **{abs(variacion):.2f}%** {'arriba' if variacion >=0 else 'abajo'} respecto a idéntico período previo ({txt_ref}).")
+                    if variacion > 5:
+                        st.success("🚀 **Motor a tope:** El sector está ganando inercia con fuerza. ¡Asegurar stock suficiente!")
+                    elif variacion >= -5:
+                        st.warning("⚖️ **Velocidad Crucero:** Manteniendo inercia de distribución estable.")
+                    else:
+                        st.error("📉 **Alerta Desaceleración:** Caída prolongada de litros en las Mangueras. Sugerencia de inyectar crédito o promociones.")
+
+        st.markdown("---")
+
+        # 2. Alertas de Riesgo Hugo Rodano (Concentración Crítica)  [Se calcula siempre para exports/Score]
+        ag_riesgo = dff.groupby(["localidad", "provincia"]).agg(
+            volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+            clientes=pd.NamedAgg(column="nombre", aggfunc="nunique") # <-- CORREGIDO
+        ).reset_index()
+
+        if TABLEROS.get("c_aler", True):
+            st.subheader("⚠️ Alertas de Fuga & Concentración")
+            
+            # Umbral: Más del promedio de volumen pero con menos de 3 clientes (Dependencia peligrosa)
+            vol_promedio = ag_riesgo['volumen'].mean() if not ag_riesgo.empty else 0
+            riesgo_critico = ag_riesgo[(ag_riesgo['volumen'] > vol_promedio) & (ag_riesgo['clientes'] <= 2)]
+            
+            if not riesgo_critico.empty:
+                st.error(f"Se detectaron {len(riesgo_critico)} zonas con Riesgo de Fuga por alta concentración.")
+                
+                # Limpiamos, ordenamos y traducimos los títulos
+                show_df = riesgo_critico[['localidad', 'provincia', 'volumen', 'clientes']].sort_values("volumen", ascending=False)
+                show_df.columns = ["LOCALIDAD", "PROVINCIA", "VOLUMEN (LTS)", "CANTIDAD CLIENTES"]
+                
+                # Formateamos los números para que no muestre 3826.000000
+                show_df['VOLUMEN (LTS)'] = show_df['VOLUMEN (LTS)'].apply(lambda x: f"{x:,.0f}")
+                
+                # Estilos exactos
+                sty_df = show_df.style.set_properties(**{
+                    'background-color': 'white', 
+                    'color': 'black'
+                }).set_table_styles([{
+                    'selector': 'th', 
+                    'props': [('background-color', '#2563eb !important'), ('color', 'white !important')]
+                }])
+                
+                # Usamos st.dataframe para que vuelva a ser scrollable (la grilla interactiva)
+                st.dataframe(sty_df, use_container_width=True)
+                
+                # Exportación Sutil de Alertas
+                with st.expander("📥 Exportar Listado de Riesgos", expanded=False):
+                    col_r1, col_r2 = st.columns(2)
+                    fmt_r = col_r1.selectbox("Formato", ["PDF", "XLSX"], key="fmt_riesgo_vfinal")
+                    if fmt_r == "PDF":
+                        btn_r = generar_pdf_corporativo(riesgo_critico, "Alertas de Riesgo por Concentracion", "Filtros Activos", "Solo Datos")
+                        st.download_button("Descargar Reporte de Riesgos", btn_r, "Alertas_Riesgo.pdf", "application/pdf")
+                    else:
+                        btn_rx = generar_excel_corporativo(riesgo_critico, "xlsx")
+                        st.download_button("Descargar Excel de Riesgos", btn_rx, "Alertas_Riesgo.xlsx")
+            else:
+                st.success("✅ No se detectan zonas con concentración crítica de clientes en el filtro actual.")
+
+        st.markdown("---")
+        if TABLEROS.get("c_matriz", True):
+            st.subheader("💸 Matriz de Exposición Financiera (Riesgo Crediticio)")
+            if 'condicion' in dff.columns:
+                # Fallback de retro-compatibilidad ultrarrápido (soporte para archivos históricos sin nom_condi)
+                if 'nom_condi' in dff.columns:
+                    dff['lbl_condicion'] = dff['nom_condi'].astype(str).str.strip()
+                    mask_invalido = dff['lbl_condicion'].isin(['S/D', 'None', 'nan', '', 'null'])
+                    dff.loc[mask_invalido, 'lbl_condicion'] = dff.loc[mask_invalido, 'condicion']
+                else:
+                    dff['lbl_condicion'] = dff['condicion']
+    
+                # Primero ordenamos por Capital Comprometido (ventas) para extraer el Top 10 real
+                ag_cond = dff.groupby(['lbl_condicion']).agg(
+                    volumen=("volumen", "sum"),
+                    ventas=("venta_total", "sum")
+                ).reset_index().sort_values('ventas', ascending=False)
+                
+                # CSS para forzar el título del toggle a color BLANCO
+                st.markdown('<style>div[data-testid="stToggle"] p {color: white !important; font-weight: 500;}</style>', unsafe_allow_html=True)
+                
+                mostrar_todas = st.toggle("Mostrar Top 10 -> Cargar Todas las Condiciones", value=False)
+                if not mostrar_todas:
+                    ag_cond = ag_cond.head(10)
+                    
+                fig_cond = px.bar(
+                    ag_cond, x='lbl_condicion', y='ventas', color='lbl_condicion',
+                    template="plotly_dark", 
+                    labels={'lbl_condicion': 'Condición de Pago', 'ventas': 'Capital Comprometido ($)'},
+                    text_auto='.3s'
+                )
+                fig_cond.update_yaxes(gridcolor='rgba(255,255,255,0.15)')
+                # Ordenamos la gráfica de izquierda a derecha (ascendente)
+                fig_cond.update_xaxes(categoryorder='total ascending', tickfont=dict(color='white'))
+                fig_cond.update_layout(margin=dict(t=20), height=350, paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                st.plotly_chart(fig_cond, use_container_width=True)
+
+        st.markdown("---")
+        if TABLEROS.get("c_score", True):
+            st.subheader("🧠 Ranking de Relevancia Estratégica ($Score$)")
+            v_gl = dff['volumen'].sum() if not dff.empty else 1
+            c_gl = dff['nombre'].nunique() if not dff.empty else 1
+            
+            ag_riesgo['Score'] = ((ag_riesgo['volumen'] / v_gl) * 70) + ((ag_riesgo['clientes'] / c_gl) * 30)
+            top_20 = ag_riesgo.sort_values("Score", ascending=False).head(20)
+    
+            fig_score = px.bar(
+                top_20, 
+                x='Score', 
+                y='localidad', 
+                color='Score', 
+                orientation='h',
+                title="Top 20 Localidades por Potencial de Mercado",
+                color_continuous_scale='RdYlGn',
+                template="plotly_dark"
+            )
+            fig_score.update_yaxes(categoryorder='total ascending', gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=12))
+            fig_score.update_xaxes(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(color='#ffffff', size=13))
+            fig_score.update_layout(margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(15, 23, 42, 0.85)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#ffffff', size=13))
+            st.plotly_chart(fig_score, use_container_width=True)
+    
+            with st.expander("📥 Exportar Ranking de Score", expanded=False):
+                sc1, sc2 = st.columns(2)
+                fmt_sc = sc1.selectbox("Formato ", ["PDF", "XLSX"], key="fmt_score_t4_vfinal")
+                if fmt_sc == "PDF":
+                    btn_sc = generar_pdf_corporativo(top_20, "Ranking Estrategico de Score", "Top 20 Localidades", "Completo")
+                    st.download_button("Descargar Reporte de Score", btn_sc, "Ranking_Score.pdf", "application/pdf")
+                else:
+                    btn_scx = generar_excel_corporativo(top_20, "xlsx")
+                    st.download_button("Descargar Excel de Score", btn_scx, "Ranking_Score.xlsx")
+
+        st.markdown("---")
+        if TABLEROS.get("c_adn", True):
+            st.subheader("🌲 Radiografía Sectorial (ADN del Cliente)")
+            st.info("🧬 **Análisis de Impacto Productivo:** Este modelo circular mapea de qué industrias exactas depende tu facturación. El círculo central verde oscuro agrupa las áreas macro (ej. AGRO, TRANSPORTE), y al hacer click en él se despliegan los anillos exteriores que contienen los sub-rubros específicos. Te permite identificar instantáneamente el ADN comercial de tu negocio y dónde está apoyado el mayor volumen.")
+            if 'rubro' in dff.columns and 'subrubro' in dff.columns:
+                ag_rubro = dff.groupby(['rubro', 'subrubro']).agg(volumen=("volumen", "sum")).reset_index()
+                # Limpiamos los S/D masivos si nublan el gráfico
+                ag_rubro = ag_rubro[ag_rubro['rubro'] != "S/D"]
+                if not ag_rubro.empty:
+                    fig_sun = px.sunburst(
+                        ag_rubro, path=['rubro', 'subrubro'], values='volumen',
+                        color='volumen', color_continuous_scale='Blues',
+                        template="plotly_dark"
+                    )
+                    fig_sun.update_layout(margin=dict(t=20, l=0, r=0, b=0), height=550, paper_bgcolor='rgba(15, 23, 42, 0.85)', font={'color':'white'})
+                    st.plotly_chart(fig_sun, use_container_width=True)
+                else:
+                    st.warning("No hay suficientes datos sectoriales ('Rubro') etiquetados en este Excel para trazar la Radiografía.")
+    else:
+        st.warning("⚠️ Sin datos para procesar en el Copiloto Estratégico.")
+
+# --- TAB 5: ANÁLISIS DE DATOS PUROS ---
+if app_page == "📊 ANÁLISIS DE DATOS PUROS":
+    st.markdown("<h2 style='color:#ffffff'>📊 Análisis de Datos Puros</h2>", unsafe_allow_html=True)
+    if not dff.empty:
+        d_puros = dff.copy()
+        if 'domicilio' not in d_puros.columns:
+            d_puros['domicilio'] = "S/D"
+            
+        str_fechas_dp = f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else rango_sel
+        txt_filtros_dp = f"Fechas: {str_fechas_dp} | Provincia: {sel_prov or 'Todas'} | Localidad: {sel_loc or 'Todas'} | Combustible: {sel_sub or 'Todos'}"
+
+        st.info("💡 En esta sección puedes auditar y descargar los datos crudos en grillas estáticas. Las exportaciones corporativas incluirán automáticamente la columna 'Domicilio'.")
+
+        # --- VISTA 1: Resumen por Cliente ---
+        if TABLEROS.get("dp_cliente", True):
+            st.markdown("#### Resumen por Cliente")
+            t1 = d_puros.groupby(["provincia", "localidad", "domicilio", "nombre", "subti_comb"]).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+            
+            t1_ui = t1.drop(columns=["domicilio"])
+            t1_ui.columns = ["Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t1_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            
+            t1_exp = t1.rename(columns={
+                "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+            
+            col_dp1, _ = st.columns([1, 2])
+            with col_dp1.expander("📥 Exportar Resumen Cliente", expanded=False):
+                ed1_1, ed1_2 = st.columns(2)
+                fmt_dp1 = ed1_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp1")
+                mod_dp1 = ed1_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp1", horizontal=True)
+                if fmt_dp1 == "PDF":
+                    btn_dp1 = generar_pdf_corporativo(t1_exp, "Resumen General por Cliente", txt_filtros_dp, mod_dp1)
+                    st.download_button("Descargar Reporte PDF", btn_dp1, "Resumen_Cliente.pdf", "application/pdf")
+                else:
+                    btn_xdp1 = generar_excel_corporativo(t1_exp, fmt_dp1.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp1}", btn_xdp1, f"Resumen_Cliente.{fmt_dp1.lower()}")
+
+        st.markdown("---")
+        
+        # --- VISTA 2: Resumen Mensual ---
+        if TABLEROS.get("dp_mensual", True):
+            st.markdown("#### Resumen Mensual por Cliente")
+            t2_base = d_puros.copy()
+            
+            if 'fecha_dt' in t2_base.columns:
+                # Creamos una máscara de ordenación (YYYY-MM) y la máscara visual directamente del campo original Datetime real
+                t2_base['sort_ym'] = t2_base['fecha_dt'].dt.strftime('%Y-%m').fillna('0000-00')
+                t2_base['fecha_mes'] = t2_base['fecha_dt'].dt.strftime('%m/%Y').fillna('S/D')
+            else:
+                t2_base['sort_ym'] = "0000-00"
+                t2_base['fecha_mes'] = "S/D"
+                
+            if 'codigo' not in t2_base.columns: t2_base['codigo'] = "S/D"
+            if 'detalle' not in t2_base.columns: t2_base['detalle'] = "S/D"
+            
+            t2 = t2_base.groupby(["sort_ym", "fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"]).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+            
+            # Orden Cronológico Genuino y definitivo
+            t2 = t2.sort_values(by=['sort_ym'], ascending=True)
+            
+            t2_ui = t2[["fecha_mes", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+            t2_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t2_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            
+            t2_exp = t2[["fecha_mes", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
+                "fecha_mes": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+            
+            col_dp2, _ = st.columns([1, 2])
+            with col_dp2.expander("📥 Exportar Resumen Mensual", expanded=False):
+                ed2_1, ed2_2 = st.columns(2)
+                fmt_dp2 = ed2_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp2")
+                mod_dp2 = ed2_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp2", horizontal=True)
+                if fmt_dp2 == "PDF":
+                    btn_dp2 = generar_pdf_corporativo(t2_exp, "Agrupacion Mensual por Cliente", txt_filtros_dp, mod_dp2)
+                    st.download_button("Descargar Reporte PDF ", btn_dp2, "Resumen_Mensual.pdf", "application/pdf")
+                else:
+                    btn_xdp2 = generar_excel_corporativo(t2_exp, fmt_dp2.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp2} ", btn_xdp2, f"Resumen_Mensual.{fmt_dp2.lower()}")
+
+        st.markdown("---")
+
+        # --- VISTA 3: Base Abierta ---
+        if TABLEROS.get("dp_abierto", True):
+            st.markdown("#### Detalle Abierto de Base")
+            t3 = d_puros.copy()
+            if 'fecha_dt' in t3.columns:
+                t3 = t3.dropna(subset=['fecha_dt'])
+            else:
+                t3['fecha_dt'] = pd.NaT
+    
+            if 'codigo' not in t3.columns: t3['codigo'] = "S/D"
+            if 'detalle' not in t3.columns: t3['detalle'] = "S/D"
+    
+            t3_ag = t3.groupby(["fecha_dt", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle"], dropna=False).agg(
+                volumen=pd.NamedAgg(column="volumen", aggfunc="sum"),
+                ventas=pd.NamedAgg(column="venta_total", aggfunc="sum")
+            ).reset_index()
+    
+            t3_ag = t3_ag.sort_values(by="fecha_dt", ascending=True)
+            t3_ag['fecha_corta'] = t3_ag['fecha_dt'].dt.strftime('%d/%m/%Y').fillna("S/D")
+    
+            t3_ui = t3_ag[["fecha_corta", "provincia", "localidad", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]]
+            t3_ui.columns = ["Fecha", "Provincia", "Localidad", "Cliente (Nombre)", "Subtipo Combustible", "Código", "Detalle", "Volumen (Lts)", "Ventas Totales ($)"]
+            st.dataframe(
+                t3_ui, 
+                use_container_width=True,
+                column_config={
+                    "Volumen (Lts)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ventas Totales ($)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+    
+            t3_exp = t3_ag[["fecha_corta", "provincia", "localidad", "domicilio", "nombre", "subti_comb", "codigo", "detalle", "volumen", "ventas"]].rename(columns={
+                "fecha_corta": "Fecha", "provincia": "Provincia", "localidad": "Localidad", "domicilio": "Domicilio",
+                "nombre": "Cliente (Nombre)", "subti_comb": "Subtipo Combustible", "codigo": "Código", "detalle": "Detalle",
+                "volumen": "Volumen (Lts)", "ventas": "Ventas Totales ($)"
+            })
+    
+            col_dp3, _ = st.columns([1, 2])
+            with col_dp3.expander("📥 Exportar Detalle Abierto (Registros)", expanded=False):
+                ed3_1, ed3_2 = st.columns(2)
+                fmt_dp3 = ed3_1.selectbox("Formato", ["PDF", "XLSX", "XLS"], key="f_dp3")
+                mod_dp3 = ed3_2.radio("Contenido", ["Completo", "Solo Datos"], key="m_dp3", horizontal=True)
+                if fmt_dp3 == "PDF":
+                    btn_dp3 = generar_pdf_corporativo(t3_exp, "Base Abierta por Fecha", txt_filtros_dp, mod_dp3, orientacion="L")
+                    st.download_button("Descargar Reporte PDF  ", btn_dp3, "Detalle_Abierto.pdf", "application/pdf")
+                else:
+                    btn_xdp3 = generar_excel_corporativo(t3_exp, fmt_dp3.lower())
+                    st.download_button(f"Descargar Archivo {fmt_dp3}  ", btn_xdp3, f"Detalle_Abierto.{fmt_dp3.lower()}")
+
+    else:
+        st.warning("⚠️ No se encontraron registros para los filtros seleccionados.")
+
+# --- TAB 6: MI EMPRESA VS EL RESTO (Consultor AI) ---
+if app_page == "⚔️ MI EMPRESA VS EL RESTO":
+    st.markdown("<h2 style='color:#ffffff'>⚔️ Mi Empresa VS El Mercado (AI Consultant)</h2>", unsafe_allow_html=True)
+    st.info("💡 Hazle una pregunta en texto o activa el micrófono para hablar con tu Consultor IA. La IA está conectada a tu histórico de ventas y tiene conocimiento sobre YPF, Shell, Axion, Puma y Gulf.")
+    
+    # 1. Configurar Gemini
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.warning("🚨 La variable `GEMINI_API_KEY` no ha sido encontrada en tus Secrets. Ingresa la clave provista o añade una en la Nube.")
+        temp_api = st.text_input("Ingresar GEMINI API KEY Manualmente (Temporal):", type="password")
+        if temp_api:
+            api_key = temp_api
+            
+    if api_key:
+        genai.configure(api_key=api_key)
+        
+        # Injectar la base de datos TRANSACCIONAL COMPLETA (gemini 2.5 soporta hasta 1 millón de tokens)
+        if dff.empty:
+            contexto_estrategico = "El cliente no tiene ventas registradas en sus datos históricos en función a los filtros actuales. Esto podría significar CERO despachos este mes."
+        else:
+            # Seleccionamos las columnas más relevantes para no saturar memoria inútilmente, pero pasamos TODAS las filas
+            cols_to_keep = ['fecha', 'proveedor', 'localidad', 'provincia', 'nombre', 'subti_comb', 'volumen', 'venta_total', 'bandera']
+            cols_exist = [c for c in cols_to_keep if c in dff.columns]
+            
+            # Convertimos la tabla a CSV (LIMITADA A LAS ÚLTIMAS 5,000 FILAS para evitar el bloqueo por la Cuota Gratuita (Free Tier) de 250k tokens de Google)
+            csv_data = dff[cols_exist].tail(5000).to_csv(index=False)
+            
+            contexto_estrategico = f"""
+======= BASE DE DATOS TRANSACCIONAL (Muestra de hasta 5,000 registros actuales) =======
+El usuario te ha proveído acceso a sus operaciones recientes o filtradas.
+A continuación tienes la tabla en formato CSV. 
+ÚSALA para buscar fechas exactas, clientes ("nombre"), localidades específicas, cruces de tipos de combustible ("subti_comb"), etc.
+*Si te preguntan por un dato y no está aquí, diles cordialmente que utilicen los filtros visuales de la aplicación para "enfocar" los datos antes de preguntarte.*
+
+```csv
+{csv_data}
+```
+===============================================================
+"""
+        rubro_empresa = SYS_CONF.get("empresa_rubro", "Comercialización de Combustibles")
+        actividad_empresa = SYS_CONF.get("empresa_actividad", "Distribución Mayorista")
+        
+        system_prompt = f"""
+ERES UN CONSULTOR C-LEVEL ESTRATÉGICO ESPECIALIZADO EN EL RUBRO: {rubro_empresa.upper()}, ACTIVIDAD: {actividad_empresa.upper()} EN ARGENTINA.
+Tu objetivo es ayudar a esta empresa evaluando sus números frente a los líderes y promedios de su mercado (si es combustibles: YPF, Shell, Axion, Puma; si es otro rubro, los equivalentes) basándote en la información pública disponible en internet.
+El usuario te indicará un problema o hará una pregunta (puede ser un directivo escribiendo o hablándote por voz).
+
+Datos internos de nuestra empresa (USALOS PARA COMPARAR Y ACONSEJAR PLANES DE ACCIÓN TRÍPLEMENTE VERIFICADOS):
+{contexto_estrategico}
+
+Reglas:
+1. Sé extremadamente profesional y analítico, simulando un consultor Top Tier (ej. McKinsey / BCG) en el rubro {rubro_empresa}.
+2. Compara sistemáticamente nuestro desempeño con las métricas típicas de líderes del sector.
+3. Plantea recomendaciones viables en bullet points estructurados.
+4. Si la pregunta incluye un tono hablado (como si fuera un audio), sé un poco más conversacional pero conservando la elegancia C-level del negocio.
+"""
+        
+        if "messages_vs" not in st.session_state:
+            st.session_state.messages_vs = [{"role": "assistant", "content": "Hola. Soy tu consultor estratégico automatizado de mercado. ¿Qué competidor te gustaría analizar hoy o qué métrica de tu portafolio evaluamos?"}]
+
+        for msg in st.session_state.messages_vs:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Controles Input (Texto + Voz)
+        c_mic, c_txt = st.columns([1, 8])
+        with c_mic:
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+            audio_data = mic_recorder(start_prompt="Record 🎙️", stop_prompt="Stop ⏹️", key='mic_recorder', format="wav")
+            
+        with c_txt:
+            prompt = st.chat_input("Escribe tu consulta estratégica aquí...")
+
+        user_content = ""
+        user_audio_bytes = None
+        
+        audio_id = audio_data.get('id') if audio_data and isinstance(audio_data, dict) else None
+        
+        if prompt:
+            user_content = prompt
+        elif audio_data is not None and st.session_state.get('last_audio_id') != audio_id:
+            user_audio_bytes = audio_data['bytes']
+            st.session_state.last_audio_id = audio_id
+
+        if user_content or user_audio_bytes:
+            display_text = user_content if user_content else "🎤 *[Mensaje de Audio Grabado y Transmitido]*"
+            st.session_state.messages_vs.append({"role": "user", "content": display_text})
+            
+            with st.chat_message("user"):
+                st.markdown(display_text)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Conectándome como Agente C-Level... comparando el mercado de hidrocarburos..."):
+                    try:
+                        # Usar Gemini 2.5 Flash API Multimodal nativo (Soportado por llaves 2026)
+                        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_prompt)
+                        
+                        contents = []
+                        if user_audio_bytes:
+                            audio_blob = {
+                                "mime_type": "audio/wav",
+                                "data": user_audio_bytes
+                            }
+                            contents.append(audio_blob)
+                        if user_content:
+                            contents.append(user_content)
+                        else:
+                            contents.append("Por favor escucha y responde al audio adjunto basándote en mi contexto interno y tu conocimiento del mercado de hidrocarburos en Argentina.")
+                            
+                        # Concatenamos el historial para memoria artificial (simplificado)
+                        chat_history = ""
+                        for m in st.session_state.messages_vs[:-1]:
+                            chat_history += f"{m['role'].upper()}: {m['content']}\n\n"
+                        if chat_history:
+                            contents.insert(0, "HISTORIAL DE CONVERSACIÓN PREVIO PARA DAR CONTEXTO:\n" + chat_history)
+
+                        response = model.generate_content(contents)
+                        respuesta = response.text
+                        st.markdown(respuesta)
+                        st.session_state.messages_vs.append({"role": "assistant", "content": respuesta})
+                    except Exception as e:
+                        try:
+                            val_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                            st.error(f"Error 404 del Servidor de Google. Tu llave tiene acceso a estos modelos válidos: {val_models}. Error nativo: {e}")
+                        except Exception as e2:
+                            st.error(f"Error crítico en el token: {e} - No pude listar los modelos: {e2}")
+
+# --- TAB EXTRA: GESTIÓN DE PERSONAL (ADMIN RBAC) ---
+if app_page == "👥 GESTIÓN DE PERSONAL":
+    st.markdown("<h2 style='color:#ffffff'>👥 Panel de Control de Administradores</h2>", unsafe_allow_html=True)
+    st.info("💡 Desde aquí podés crear nuevas credenciales, modificar permisos de tu equipo o dar de baja a usuarios.")
+    
+    # 📡 Descargar lista de usuarios en caliente
+    try:
+        url = st.secrets.get("SUPABASE_URL", "https://ewwdsiewmdwbxoiguoas.supabase.co")
+        key = st.secrets.get("SUPABASE_KEY", "CLAVE_OCULTA")
+        supabase = create_client(url, key)
+        resp_usrs = supabase.table("usuarios").select("*").execute()
+        lista_usuarios = resp_usrs.data
+    except Exception as e:
+        st.error(f"Error técnico recuperando la bóveda de usuarios: {e}")
+        lista_usuarios = []
+        supabase = None
+        
+    
+
+    t_crear, t_modificar, t_bloquear = st.tabs(["✨ Crear Credencial", "✏️ Modificar Accesos", "⛔ Bloquear / Baja"])
+    
+    with t_crear:
+        with st.form("form_alta_usuario", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            n_user = col1.text_input("Usuario (Nombre de acceso corto)")
+            n_mail = col2.text_input("Email Corporativo")
+            n_pass = st.text_input("Contraseña Temporal", type="password")
+            
+            st.markdown("### 🔑 Permisos Asignados al Usuario")
+            p_ing = st.checkbox("🚀 INGESTA & CARGA")
+            p_vis = st.checkbox("🏠 VISIÓN EJECUTIVA")
+            p_ine = st.checkbox("📈 INERCIA TEMPORAL")
+            p_mer = st.checkbox("🍩 PODER DE MERCADO")
+            p_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO")
+            p_vsr = st.checkbox("⚔️ MI EMPRESA VS EL RESTO")
+            p_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS")
+            p_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)")
+            p_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA")
+            
+            btn_crear = st.form_submit_button("Crear Nueva Credencial", type="primary", use_container_width=True)
+            
+            if btn_crear:
+                if not n_user.strip() or not n_pass.strip():
+                    st.error("❌ El Usuario y la Contraseña son obligatorios.")
+                elif supabase:
+                    try:
+                        nuevo_registro = {
+                            "usuario": n_user.strip(),
+                            "mail": n_mail.strip(),
+                            "password": n_pass.strip(),
+                            "ingesta": "si" if p_ing else "no",
+                            "vision": "si" if p_vis else "no",
+                            "inercia": "si" if p_ine else "no",
+                            "mercado": "si" if p_mer else "no",
+                            "copiloto": "si" if p_cop else "no",
+                            "vs_mercado": "si" if p_vsr else "no",
+                            "datos": "si" if p_dat else "no",
+                            "admin": "si" if p_adm else "no",
+                            "can_config": "si" if p_cfg else "no"
+                        }
+                        supabase.table("usuarios").insert(nuevo_registro).execute()
+                        st.success(f"✅ ¡Usuario '{n_user}' creado exitosamente en la bóveda! Ya puede iniciar sesión.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"🚨 Falla crítica guardando en Supabase: {e}")
+
+    with t_modificar:
+        st.subheader("Auditoría y Edición de Accesos")
+        if not lista_usuarios:
+            st.warning("No se encontraron usuarios en la bóveda.")
+        else:
+            opciones_mod = {f"{u.get('usuario', 'S/D')} ({u.get('mail', 'S/D')})": u for u in lista_usuarios}
+            sel_mod = st.selectbox("Seleccionar Empleado a Modificar", list(opciones_mod.keys()), key="sel_mod")
+            
+            if sel_mod:
+                user_data = opciones_mod[sel_mod]
+                
+                with st.form("form_edit_user"):
+                    e_user = st.text_input("Usuario (Nombre)", value=user_data.get('usuario', ''))
+                    e_mail = st.text_input("Email Corporativo", value=user_data.get('mail', ''))
+                    e_pass = st.text_input("Contraseña (Dejar igual si no se cambia)", value=user_data.get('password', ''), type="password")
+                    
+                    st.markdown("### 🔑 Ajustar Nivel de Autorización")
+                    e_ing = st.checkbox("🚀 INGESTA & CARGA", value=(str(user_data.get('ingesta', '')).lower() == 'si'))
+                    e_vis = st.checkbox("🏠 VISIÓN EJECUTIVA", value=(str(user_data.get('vision', '')).lower() == 'si'))
+                    e_ine = st.checkbox("📈 INERCIA TEMPORAL", value=(str(user_data.get('inercia', '')).lower() == 'si'))
+                    e_mer = st.checkbox("🍩 PODER DE MERCADO", value=(str(user_data.get('mercado', '')).lower() == 'si'))
+                    e_cop = st.checkbox("🧠 COPILOTO ESTRATÉGICO", value=(str(user_data.get('copiloto', '')).lower() == 'si'))
+                    e_vsr = st.checkbox("⚔️ MI EMPRESA VS EL RESTO", value=(str(user_data.get('vs_mercado', '')).lower() == 'si'))
+                    e_dat = st.checkbox("📊 ANÁLISIS DE DATOS PUROS", value=(str(user_data.get('datos', '')).lower() == 'si'))
+                    e_adm = st.checkbox("👥 GESTIÓN DE PERSONAL (Modo Dios)", value=(str(user_data.get('admin', '')).lower() == 'si'))
+                    e_cfg = st.checkbox("⚙️ CONFIGURACIÓN DEL SISTEMA", value=(str(user_data.get('can_config', '')).lower() == 'si'))
+                    
+                    btn_edit = st.form_submit_button("Actualizar Accesos en Vivo", type="primary", use_container_width=True)
+                    if btn_edit and supabase:
+                        try:
+                            supabase.table("usuarios").update({
+                                "usuario": e_user.strip(),
+                                "mail": e_mail.strip(),
+                                "password": e_pass.strip(),
+                                "ingesta": "si" if e_ing else "no",
+                                "vision": "si" if e_vis else "no",
+                                "inercia": "si" if e_ine else "no",
+                                "mercado": "si" if e_mer else "no",
+                                "copiloto": "si" if e_cop else "no",
+                                "vs_mercado": "si" if e_vsr else "no",
+                                "datos": "si" if e_dat else "no",
+                                "admin": "si" if e_adm else "no",
+                                "can_config": "si" if e_cfg else "no"
+                            }).eq("id", user_data['id']).execute()
+                            st.success("✅ ¡Permisos inyectados con éxito a la Base de Datos!")
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error actualizando usuario: {e}")
+
+    with t_bloquear:
+        st.subheader("Congelamiento y Baja Definitiva")
+        if not lista_usuarios:
+            st.warning("No se encontraron usuarios.")
+        else:
+            opciones_baja = {f"{u.get('usuario', 'S/D')} ({u.get('mail', 'S/D')})": u for u in lista_usuarios}
+            sel_baja = st.selectbox("Seleccionar Empleado", list(opciones_baja.keys()), key="sel_baja")
+            
+            if sel_baja:
+                user_del = opciones_baja[sel_baja]
+                st.error(f"⚠️ **ATENCIÓN:** Estás a punto de alterar el acceso de **{user_del.get('usuario')}**.")
+                st.write("Podés decidir quitarle todos los permisos (Congelar la cuenta para mantener el historial) o borrar por completo el registro de la Base de Datos.")
+                
+                colA, colB = st.columns(2)
+                with colA:
+                    if st.button("⛔ Congelar Cuenta (Remover todo permiso)", use_container_width=True):
+                        if supabase:
+                            try:
+                                supabase.table("usuarios").update({
+                                    "ingesta": "no", "vision": "no", "inercia": "no",
+                                    "mercado": "no", "copiloto": "no", "vs_mercado": "no", "datos": "no", "admin": "no", "can_config": "no"
+                                }).eq("id", user_del['id']).execute()
+                                st.success("Cuenta archivada de forma segura.")
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                with colB:
+                    if st.button("🗑️ Eliminar Usuario Definitivamente", type="primary", use_container_width=True):
+                        if supabase:
+                            try:
+                                supabase.table("usuarios").delete().eq("id", user_del['id']).execute()
+                                st.success("Registro de usuario aniquilado permanentemente.")
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Falla en la Bóveda al borrar: {e}")
+
+# --- TAB EXTRA: CONFIGURACION (SUPERADMIN) ---
+if app_page == "⚙️ CONFIGURACIÓN":
+    st.markdown("## ⚙️ Configuración del Sistema")
+    st.info("Estos ajustes alteran la interfaz gráfica pública y los parámetros del Robot Automático (Data Pipeline).")
+    
+    t1, t2, t3 = st.tabs(["🎨 Identidad de Empresa (Branding)", "🔌 Motor de Datos (Arquitectura ETL)", "🖥️ Tableros a Mostrar"]) # Forzando recompilación Streamlit
+    
+    with t1:
+        with st.form("form_branding"):
+            st.subheader("Configuración Visual")
+            nv_nombre = st.text_input("Sufijo del Título Comercial", value=SYS_CONF.get("empresa_nombre", "Neural Hub"), help="Reemplaza la palabra 'Neural Hub' en el título general.")
+            nv_logo = st.text_input("URL del Logo (Formato http:// o un Emoji)", value=SYS_CONF.get("logo_url", "🤖"), help="Reemplaza el ícono del tanque/robot general.")
+            nv_rubro = st.text_input("Rubro del Negocio", value=SYS_CONF.get("empresa_rubro", "Comercialización de Combustibles"), help="El rubro principal de la empresa. Servirá de contexto vital para el Consultor de IA Gemini.")
+            nv_actividad = st.text_input("Actividad Específica", value=SYS_CONF.get("empresa_actividad", "Distribución Mayorista (Downstream)"), help="La rama particular. Ej: Agro, Logística, Distribución.")
+            
+            sub_brand = st.form_submit_button("💾 Guardar Brand System", type="primary")
+            if sub_brand:
+                try:
+                    url = st.secrets.get("SUPABASE_URL")
+                    key = st.secrets.get("SUPABASE_KEY")
+                    sc: Client = create_client(url, key)
+                    sc.table("configuracion").update({
+                        "empresa_nombre": nv_nombre, 
+                        "logo_url": nv_logo,
+                        "empresa_rubro": nv_rubro,
+                        "empresa_actividad": nv_actividad
+                    }).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success("¡Marca registrada con éxito! Aplicando cambios...")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error escribiendo en Bóveda: {e}")
+                    
+    with t2:
+        st.subheader("Orquesta del Inyector de Datos (Nocturno)")
+        import time
+        metodos = ["FTP", "DRIVE", "LOCAL"]
+        idx_modo = metodos.index(SYS_CONF.get("etl_modo", "FTP").upper()) if SYS_CONF.get("etl_modo", "FTP").upper() in metodos else 0
+        
+        # El selector debe estar AFUERA del form para que reaccione al instante (Streamlit reactivo)
+        nv_modo = st.selectbox("Método de Extracción Satelital (ETL Automático)", metodos, index=idx_modo)
+        
+        with st.form("form_etl"):
+            st.divider()
+            
+            # Variables preservadas por seguridad si no se renderizan
+            nv_fh = SYS_CONF.get("ftp_host", "")
+            nv_fu = SYS_CONF.get("ftp_user", "")
+            nv_fp = SYS_CONF.get("ftp_pass", "")
+            nv_fo = SYS_CONF.get("ftp_origen", "/pendientes/")
+            nv_fd = SYS_CONF.get("ftp_destino", "/procesados/")
+            nv_do = SYS_CONF.get("drive_origen", "")
+            nv_dd = SYS_CONF.get("drive_destino", "")
+            
+            if nv_modo == "FTP":
+                st.markdown("#### 🌐 Parámetros FTP Corporativo")
+                nv_fh = st.text_input("Dirección Host (Sin ftp:// ni barras)", value=nv_fh, help="Ejemplo: 192.168.3.249 o ftp.miempresa.com. Representa la IP o dominio del servidor donde el Robot debe ir a buscar los archivos.")
+                nv_fu = st.text_input("Usuario (Login ID)", value=nv_fu, help="El nombre de usuario brindado por el equipo de IT para autenticarse (Ej: admin_combustibles).")
+                nv_fp = st.text_input("Secure Password", value=nv_fp, type="password", help="La contraseña de acceso. Al guardarla, seencriptará automáticamente en Supabase.")
+                nv_fo = st.text_input("Carpeta Lectura Crudos", value=nv_fo, help="Ruta exacta a la carpeta del FTP donde se depositarán los excels nuevos. Debe empezar y terminar con barra. Ejemplo: /pendientes/ o /Archivos_Nuevos/")
+                nv_fd = st.text_input("Carpeta Papelera (Archivos Procesados)", value=nv_fd, help="Ruta a donde el Robot moverá los excels una vez absorbidos, para no volver a inyectarlos al día siguiente. Ejemplo: /procesados/")
+                
+            elif nv_modo == "DRIVE":
+                st.markdown("#### ☁️ Parámetros Google Drive")
+                nv_do = st.text_input("Drive ID - Carpeta Lectura (Crudos)", value=nv_do, help="Ejemplo: 1_SH38TdW1AUSZ14pkc... Es el código secreto alfanumérico largo que podés ver en la URL (arriba en el navegador) cuando entrás a tu carpeta de Google Drive.")
+                nv_dd = st.text_input("Drive ID - Carpeta Destino (Procesados)", value=nv_dd, help="El ID (código de URL) de la carpeta donde el robot archivará los excels históricos luego de procesarlos.")
+                
+            elif nv_modo == "LOCAL":
+                st.markdown("#### 💻 Modo de Operación Local (Manual / Emergencia)")
+                st.info("🔌 El robot NO se conectará a internet (Se ignoran FTP y Drive). \n\nBuscará y absorberá únicamente los Excels que se depositen físicamente en la carpeta interna `/temp_pendientes/` del disco duro del servidor.")
+                
+            sub_etl = st.form_submit_button("🔥 Enviar Instrucciones al Robot ETL", type="primary", use_container_width=True)
+            if sub_etl:
+                try:
+                    url = st.secrets.get("SUPABASE_URL")
+                    key = st.secrets.get("SUPABASE_KEY")
+                    sc = create_client(url, key)
+                    sc.table("configuracion").update({
+                        "etl_modo": nv_modo,
+                        "ftp_host": nv_fh, "ftp_user": nv_fu, "ftp_pass": nv_fp, 
+                        "ftp_origen": nv_fo, "ftp_destino": nv_fd,
+                        "drive_origen": nv_do, "drive_destino": nv_dd
+                    }).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success(f"¡Secuencias inyectadas exitosamente! El Robot ahora usará el modo: {nv_modo}")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error cableando el Motor ETL: {e}")
+
+    with t3:
+        st.subheader("🖥️ Conmutador Global de Módulos Visuales")
+        st.info("💡 Al apagar un tablero, se ocultará instantáneamente para TODOS en la corporación. El diseño inteligente subirá los módulos inferiores para evitar dejar 'huecos' grises en la pantalla.")
+        with st.form("form_toggles"):
+            st.markdown("### 🏠 VISIÓN EJECUTIVA")
+            vis_kpi = st.toggle("📊 KPIs Principales (Tarjetas)", value=TABLEROS.get("vis_kpi", True))
+            v_mapa = st.toggle("📍 Concentración Geográfica (Mapa de Sensibilidad)", value=TABLEROS.get("vis_mapa", True))
+            v_grilla = st.toggle("🚦 Grilla Estratégica (Análisis de Mercado)", value=TABLEROS.get("vis_grilla", True))
+            
+            st.markdown("### 📈 INERCIA TEMPORAL")
+            i_total = st.toggle("📊 Evolución del Volumen Total", value=TABLEROS.get("i_total", True))
+            i_prod = st.toggle("🏷️ Empuje por Producto (Tendencia)", value=TABLEROS.get("i_prod", True))
+            i_dom = st.toggle("🏅 Dominancia por Zona (Ranking Volumen)", value=TABLEROS.get("i_dom", True))
+            
+            st.markdown("### 🍩 PODER DE MERCADO")
+            m_prov = st.toggle("🏭 Poder de Negociación por Proveedor", value=TABLEROS.get("m_prov", True))
+            m_part = st.toggle("🍩 Participación por Tipo de Producto (Dona)", value=TABLEROS.get("m_part", True))
+            m_terr = st.toggle("🚩 Batalla por el Dominio Territorial (Bandera)", value=TABLEROS.get("m_terr", True))
+            
+            st.markdown("### 🧠 COPILOTO ESTRATÉGICO")
+            c_vel = st.toggle("🏎️ Tacómetro de Velocidad Comercial", value=TABLEROS.get("c_vel", True))
+            c_aler = st.toggle("⚠️ Alertas de Fuga & Concentración", value=TABLEROS.get("c_aler", True))
+            c_matriz = st.toggle("💸 Matriz de Exposición Financiera", value=TABLEROS.get("c_matriz", True))
+            c_score = st.toggle("🧠 Ranking de Relevancia Estratégica ($Score$)", value=TABLEROS.get("c_score", True))
+            c_adn = st.toggle("🌲 Radiografía Sectorial (ADN del Cliente)", value=TABLEROS.get("c_adn", True))
+            
+            st.markdown("### 📊 ANÁLISIS DE DATOS PUROS")
+            dp_cliente = st.toggle("👥 Resumen por Cliente", value=TABLEROS.get("dp_cliente", True))
+            dp_mensual = st.toggle("📅 Resumen Mensual por Cliente", value=TABLEROS.get("dp_mensual", True))
+            dp_abierto = st.toggle("📖 Detalle Abierto de Base (Registros)", value=TABLEROS.get("dp_abierto", True))
+            
+            if st.form_submit_button("💾 Guardar y Aplicar Layout", type="primary", use_container_width=True):
+                try:
+                    sc = create_client(st.secrets.get("SUPABASE_URL"), st.secrets.get("SUPABASE_KEY"))
+                    nuevos_tableros = {
+                        "vis_kpi": vis_kpi, "vis_mapa": v_mapa, "vis_grilla": v_grilla, 
+                        "i_total": i_total, "i_prod": i_prod, "i_dom": i_dom,
+                        "m_prov": m_prov, "m_part": m_part, "m_terr": m_terr,
+                        "c_vel": c_vel, "c_aler": c_aler, "c_matriz": c_matriz, "c_score": c_score, "c_adn": c_adn,
+                        "dp_cliente": dp_cliente, "dp_mensual": dp_mensual, "dp_abierto": dp_abierto
+                    }
+                    # PostgreSQL/Supabase JSONb acepta el diccionario de Python directamente sin stringificar
+                    sc.table("configuracion").update({"tableros_activos": nuevos_tableros}).eq("id", 1).execute()
+                    load_sys_config.clear()
+                    st.success("¡Disposición de Tableros guardada impecablemente en Bóveda! Refrescando la UI...")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error grabando Toggles en DB: {e}. ¿Creaste la columna 'tableros_activos' en la tabla configuracion?")
